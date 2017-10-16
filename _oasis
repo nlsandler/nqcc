@@ -1,0 +1,17 @@
+Name: nqcc
+Version: 0.1
+Synopsis: A tiny c compiler
+Authors: Nora Sandler
+License: MIT
+
+Description: A simple compiler for a subset of C
+
+OASISFormat: 0.4
+BuildTools: ocamlbuild
+Plugins: META (0.4), DevFiles (0.4)
+
+Executable "nqcc"
+  Path: src
+  MainIs: nqcc.ml
+  BuildDepends:
+    str, util, lex, ast, parse
