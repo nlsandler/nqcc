@@ -43,8 +43,7 @@ end =
                     | "return" -> ReturnKeyword
                     | "int" -> IntKeyword
                     | "char" -> CharKeyword
-                    | _ -> Id(id_token_str)
-                in
+                    | _ -> Id(id_token_str) in
                     (id_token, rest)
             else
                 failwith ("Syntax error: \""^input^ "\" is not valid.")
@@ -61,24 +60,19 @@ end =
                         | '('::rest -> (OpenParen, Util.implode rest)
                         | ')'::rest -> (CloseParen, Util.implode rest)
                         | ';'::rest -> (Semicolon, Util.implode rest)
-                        | _ -> get_kw_int_or_id input
-                    in
+                        | _ -> get_kw_int_or_id input in
                     tok :: (lex remaining_program)
 
         let tok_to_string t =
-            let s = 
-                match t with
-                | OpenBrace -> "{"
-                | CloseBrace -> "}"
-                | OpenParen -> "("
-                | CloseParen -> ")"
-                | Semicolon -> ";"
-                | IntKeyword -> "INT"
-                | CharKeyword -> "CHAR"
-                | ReturnKeyword -> "RETURN"
-                | Int i -> Printf.sprintf "INT<%d>" i
-                | Id id -> Printf.sprintf "ID<%s>" id
-            in
-            s
-
+            match t with
+            | OpenBrace -> "{"
+            | CloseBrace -> "}"
+            | OpenParen -> "("
+            | CloseParen -> ")"
+            | Semicolon -> ";"
+            | IntKeyword -> "INT"
+            | CharKeyword -> "CHAR"
+            | ReturnKeyword -> "RETURN"
+            | Int i -> Printf.sprintf "INT<%d>" i
+            | Id id -> Printf.sprintf "ID<%s>" id
     end

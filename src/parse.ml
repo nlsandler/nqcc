@@ -14,8 +14,7 @@
     val parse : Lex.token list -> AST.prog
 end =
 struct
-    let rec parse_fun_params tokens =
-        match tokens with
+    let rec parse_fun_params = function
         | Lex.CloseParen::rest -> ([], rest)
         | Lex.IntKeyword::(Lex.Id name)::rest -> 
             let other_params, rest = parse_fun_params rest in
@@ -25,8 +24,7 @@ struct
             (AST.Param(AST.CharType, AST.ID(name))::other_params, rest)
         | _ -> failwith("Parse error in parse_fun_params")
 
-    let parse_exp tokens =
-        match tokens with
+    let parse_exp = function
         | (Lex.Int i)::rest -> (AST.Const(AST.Int(i)), rest)
         | tok::rest -> failwith("Unrecognized token "^(Lex.tok_to_string tok)^" in parse_exp")
         | [] -> failwith("Expected expression in parse_exp but none found")
@@ -54,15 +52,13 @@ struct
             match tokens with
             | Lex.IntKeyword::(Lex.Id name)::Lex.OpenParen::rest -> (AST.IntType, AST.ID(name), rest)
             | Lex.CharKeyword::(Lex.Id name)::Lex.OpenParen::rest -> (AST.CharType, AST.ID(name), rest)
-            | _ -> failwith("Parse error in parse_fun: bad function type or name")
-        in 
+            | _ -> failwith("Parse error in parse_fun: bad function type or name") in
         let fun_params, rest = parse_fun_params rest in
         let fun_body = 
             match rest with
             | Lex.OpenBrace::rest -> parse_fun_body rest
-            | _ -> failwith("Expected brace to open function body")        
-        in
-            AST.FunDecl(fun_type, fun_name, fun_params, fun_body)
+            | _ -> failwith("Expected brace to open function body") in
+        AST.FunDecl(fun_type, fun_name, fun_params, fun_body)
 
     let parse tokens = AST.Prog(parse_fun tokens)
 end
