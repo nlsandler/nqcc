@@ -15,12 +15,19 @@ struct
         (* main is always entry point *)
         let _ = Printf.fprintf chan "    .globl _main\n" in
 
+        (* generate code to execute expression and move result into eax *)
+        let generate_exp = function
+        | AST.Const(AST.Int i) -> 
+            Printf.fprintf chan "    movl    $%d, %%eax\n" i;
+        | AST.Const(AST.Char c) ->
+            Printf.fprintf chan "    movl    $%d, %%eax\n" (Char.code c);
+        | _ -> failwith("Constant not supported") in
+
         let generate_statement = function
         | AST.Return -> Printf.fprintf chan "    ret"
-        | AST.ReturnVal(AST.Const(AST.Int i)) -> 
-            Printf.fprintf chan "    movl    $%d, %%eax\n" i;
-            Printf.fprintf chan "    ret"
-        | _ -> failwith("Expression not supported") in
+        | AST.ReturnVal exp -> 
+            let _ = generate_exp exp in
+            Printf.fprintf chan "    ret" in
 
         let generate_statements statements = List.iter generate_statement statements in
 

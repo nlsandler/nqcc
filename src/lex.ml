@@ -9,6 +9,7 @@ module Lex : sig
         | CharKeyword
         | ReturnKeyword
         | Int of int
+        | Char of char
         | Id of string
     (* type token *)
     val lex : string -> token list
@@ -25,15 +26,21 @@ end =
             | CharKeyword
             | ReturnKeyword
             | Int of int
+            | Char of char
             | Id of string 
-        let int_regexp = Str.regexp "\\(-?[0-9]+\\)\\(\\b.*\\)"
-        let id_regexp = Str.regexp "\\([A-Za-z][A-Za-z0-9_]*\\)\\(\\b.*\\)"
-        let get_kw_int_or_id input =
+        let int_regexp = Str.regexp "\\(-?[0-9]+\\)\\(\\b.*\\)" (* TODO: handle more int representations (e.g. hex) *)
+        let id_regexp = Str.regexp "\\([A-Za-z][A-Za-z0-9_]*\\)\\(\\b.*\\)" 
+        let char_regexp = Str.regexp "'[^\\\\]'\\(.*\\)" (* TODO: handle escape sequences *)
+        let get_const_or_id input =
             if Str.string_match int_regexp input 0
             then 
                 let int_token = Str.matched_group 1 input in
                 let rest = Str.matched_group 2 input in
                     (Int(int_of_string int_token), rest)
+            else if Str.string_match char_regexp input 0
+            then
+                let rest = Str.matched_group 1 input in
+                    (Char(String.get input 1), rest)
             else if Str.string_match id_regexp input 0
             then
                 let id_token_str = Str.matched_group 1 input in
@@ -60,7 +67,7 @@ end =
                         | '('::rest -> (OpenParen, Util.implode rest)
                         | ')'::rest -> (CloseParen, Util.implode rest)
                         | ';'::rest -> (Semicolon, Util.implode rest)
-                        | _ -> get_kw_int_or_id input in
+                        | _ -> get_const_or_id input in
                     tok :: (lex remaining_program)
 
         let tok_to_string t =
@@ -75,4 +82,5 @@ end =
             | ReturnKeyword -> "RETURN"
             | Int i -> Printf.sprintf "INT<%d>" i
             | Id id -> Printf.sprintf "ID<%s>" id
+            | Char c -> Printf.sprintf "CHAR<%c>" c
     end

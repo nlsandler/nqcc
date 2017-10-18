@@ -26,6 +26,7 @@ struct
 
     let parse_exp = function
         | (Lex.Int i)::rest -> (AST.Const(AST.Int(i)), rest)
+        | (Lex.Char c)::rest -> (AST.Const(AST.Char(c)), rest)
         | tok::rest -> failwith("Unrecognized token "^(Lex.tok_to_string tok)^" in parse_exp")
         | [] -> failwith("Expected expression in parse_exp but none found")
 
