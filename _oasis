@@ -14,4 +14,4 @@ Executable "nqcc"
   Path: src
   MainIs: nqcc.ml
   BuildDepends:
-    str
+    str, batteries

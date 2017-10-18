@@ -1,3 +1,5 @@
+open Batteries
+
 module Lex : sig
     type token = 
         | OpenBrace
@@ -61,12 +63,12 @@ end =
                 then []
                 else
                     let tok, remaining_program = 
-                        match Util.explode input with
-                        | '{'::rest -> (OpenBrace, Util.implode rest)
-                        | '}'::rest -> (CloseBrace, Util.implode rest)
-                        | '('::rest -> (OpenParen, Util.implode rest)
-                        | ')'::rest -> (CloseParen, Util.implode rest)
-                        | ';'::rest -> (Semicolon, Util.implode rest)
+                        match String.explode input with
+                        | '{'::rest -> (OpenBrace, String.implode rest)
+                        | '}'::rest -> (CloseBrace, String.implode rest)
+                        | '('::rest -> (OpenParen, String.implode rest)
+                        | ')'::rest -> (CloseParen, String.implode rest)
+                        | ';'::rest -> (Semicolon, String.implode rest)
                         | _ -> get_const_or_id input in
                     tok :: (lex remaining_program)
 
