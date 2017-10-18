@@ -1,5 +1,7 @@
 _build/
 *.byte
+*.s
+*.out
 _tags
 setup.data
 setup.log

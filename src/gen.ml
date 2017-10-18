@@ -16,7 +16,7 @@ struct
         let _ = Printf.fprintf chan "    .globl _main\n" in
 
         let generate_statement = function
-        | AST.Return -> Printf.fprintf chan "ret"
+        | AST.Return -> Printf.fprintf chan "    ret"
         | AST.ReturnVal(AST.Const(AST.Int i)) -> 
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
             Printf.fprintf chan "    ret"

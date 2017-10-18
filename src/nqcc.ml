@@ -2,7 +2,7 @@ open Lex
 open Parse
 open Gen
 
-let toks = Lex.lex "int main() { return 2; }" 
+let toks = Lex.lex "int main() { return 0; }" 
 let tok_strs = List.map Lex.tok_to_string toks
 let _ = List.iter (Printf.printf "%s ," ) tok_strs
 let ast = Parse.parse toks
