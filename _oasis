@@ -11,7 +11,27 @@ BuildTools: ocamlbuild
 Plugins: META (0.4), DevFiles (0.4)
 
 Executable "nqcc"
-  Path: src
-  MainIs: nqcc.ml
-  BuildDepends:
-    str, batteries
+    Path: src
+    MainIs: nqcc.ml
+    BuildDepends:
+        str, batteries
+
+#export modules as a lib so we can test them
+Library "nqcc_lib"
+    Path: src
+    Modules: Lex, Parse, Gen
+    BuildDepends:
+        batteries
+
+Executable "test_nqcc"
+    Path: tst
+    MainIs: test_nqcc.ml
+    Build$: flag(tests)
+    Install: false
+    BuildDepends: 
+        oUnit, nqcc_lib
+
+Test "test_nqcc"
+    TestTools: test_nqcc
+    Command: $test_nqcc
+    WorkingDirectory: tst

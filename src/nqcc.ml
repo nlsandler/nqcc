@@ -1,6 +1,3 @@
-open Lex 
-open Parse
-open Gen
 open Batteries
 
 let compile prog_filename = 
