@@ -38,13 +38,13 @@ let id_regexp = Str.regexp "\\([A-Za-z][A-Za-z0-9_]*\\)\\(\\b.*\\)"
     -a single closing quote
     -everything else
 *)
-let char_regexp = Str.regexp "'\\([^'\\\\]\\|\\\\\\([abfenrtv'\"?]\\|[0-7]+\\|x[0-9a-fA-F]+\\)\\)'\\(.*\\)"
+let char_regexp = Str.regexp "'\\([^'\\\\]\\|\\\\\\([abfenrtv'\"?\\\\]\\|[0-7]+\\|x[0-9a-fA-F]+\\)\\)'\\(.*\\)"
 
 let get_char char_token = 
     if String.length char_token = 1 then String.get char_token 0 else
     if String.length char_token = 2 then (* escape sequence *)
         match char_token with
-        | "\\" -> Char.chr 92   (* backslash *)
+        | "\\\\" -> Char.chr 92   (* backslash *)
         | "\\a" -> Char.chr 7   (* bell *)
         | "\\b" -> '\b'         (* backspace *)
         | "\\e" -> Char.chr 27  (* esc *)
