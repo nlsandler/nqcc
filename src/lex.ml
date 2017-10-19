@@ -30,9 +30,15 @@ end =
             | Char of char
             | Id of string
         (*
-            int_regexp: (-?[0-9]+)(\b.* ) 
+            int_regexp: (-?([0-9]+)|(0x[0-9a-f]+))(\b.* )
+            in other words:
+            -optional negative
+            -one or more digits, OR
+            -0x followed by one or more hex digits (0-9, a-f)
+            -everything else
+            all case insensitive
         *) 
-        let int_regexp = Str.regexp "\\(-?[0-9]+\\)\\(\\b.*\\)" (* TODO: handle more int representations (e.g. hex) *)
+        let int_regexp = Str.regexp_case_fold "\\(-?\\([0-9]+\\)\\|\\(0x[0-9a-f]+\\)\\)\\(\\b.*\\)"
         (*
             id_regexp: ([A-Za-z][A-Za-z0-9_]* )(\b.* ) 
         *)
@@ -49,7 +55,7 @@ end =
             -a single closing quote
             -everything else
         *)
-        let char_regexp = Str.regexp "'\\([^'\\\\]\\|\\\\\\([abfenrtv'\"?]\\|[0-7]+\\|x[0-9a-f]+\\)\\)'\\(.*\\)"
+        let char_regexp = Str.regexp "'\\([^'\\\\]\\|\\\\\\([abfenrtv'\"?]\\|[0-7]+\\|x[0-9a-fA-F]+\\)\\)'\\(.*\\)"
 
         let get_char char_token = 
             if String.length char_token = 1 then String.get char_token 0 else
@@ -75,18 +81,25 @@ end =
                 let num_str = "0o"^(String.slice ~first:1 char_token) in
                 Char.chr (Int.of_string num_str)
 
+        let get_int int_token =
+            if (String.get int_token 0 = '0') &&
+                (Char.lowercase (String.get int_token 1) != 'x') 
+            then (* octal *)
+                int_of_string ("0o"^int_token)
+            else (* decimal or hex *)
+                int_of_string int_token
+
         let get_const_or_id input =
             if Str.string_match int_regexp input 0
             then (* it's an int *)
                 let int_token = Str.matched_group 1 input in
-                let rest = Str.matched_group 2 input in
-                    (Int(int_of_string int_token), rest)
+                let rest = Str.matched_group 4 input in
+                    (Int(get_int int_token), rest)
             else if Str.string_match char_regexp input 0
             then (* it's a char *)
                 let char_token = Str.matched_group 1 input in
                 let rest = Str.matched_group 3 input in
-                let c = get_char char_token in 
-                (Char(c), rest)
+                (Char(get_char char_token), rest)
             else if Str.string_match id_regexp input 0
             then (* it's an ID, possibly a keyword *)
                 let id_token_str = Str.matched_group 1 input in
