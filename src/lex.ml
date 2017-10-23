@@ -25,7 +25,7 @@ let int_regexp = Str.regexp_case_fold "\\(-?\\([0-9]+\\)\\|\\(0x[0-9a-f]+\\)\\)\
 (*
     id_regexp: ([A-Za-z][A-Za-z0-9_]* )(\b.* ) 
 *)
-let id_regexp = Str.regexp "\\([A-Za-z][A-Za-z0-9_]*\\)\\(\\b.*\\)"
+let id_regexp = Str.regexp "\\([A-Za-z_][A-Za-z0-9_]*\\)\\(\\b.*\\)"
 (*
     char_regexp: ('[^\\]|\\([abfenrtv'?]|[0-7]{1,3}|[0-9a-f]{1,3})')(.* )
     in other words:
@@ -76,8 +76,12 @@ let get_const_or_id input =
     if Str.string_match int_regexp input 0
     then (* it's an int *)
         let int_token = Str.matched_group 1 input in
-        let rest = Str.matched_group 4 input in
-            (Int(get_int int_token), rest)
+        let int_val = get_int int_token in
+            if int_val > Int32.to_int Int32.max_int || int_val < Int32.to_int Int32.min_int
+            then failwith("Invalid int literal")
+            else
+                let rest = Str.matched_group 4 input in
+                    (Int(int_val), rest)
     else if Str.string_match char_regexp input 0
     then (* it's a char *)
         let char_token = Str.matched_group 1 input in
