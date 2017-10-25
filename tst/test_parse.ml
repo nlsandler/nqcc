@@ -24,9 +24,16 @@ let compare_consts expected actual =
     | Ast.Char(c1), Ast.Char(c2) -> c1 == c2
     | _ -> false
 
-let compare_exps expected actual =
+let compare_ops expected actual =
+    match expected, actual with 
+    | Ast.Add, Ast.Add -> true
+
+let rec compare_exps expected actual =
     match expected, actual with
     | Ast.Const(expected_const), Ast.Const(actual_const) -> compare_consts expected_const actual_const
+    | Ast.BinOp(expected_op, expected_e1, expected_e2), Ast.BinOp(actual_op, actual_e1, actual_e2) -> 
+        compare_ops expected_op actual_op && compare_exps expected_e1 actual_e1 && compare_exps expected_e2 actual_e2
+    | _ -> false
 
 let compare_statements expected actual = 
     match expected, actual with
@@ -67,7 +74,7 @@ let test_compare_asts tokens expected_ast test_ctxt =
     let actual_ast = Parse.parse tokens in
     assert_bool "Mismatched ASTs" (compare_asts expected_ast actual_ast)
 
-let simple_token_list = [Lex.IntKeyword; Lex.Id("main"); Lex.OpenParen; Lex.CloseParen; Lex.OpenBrace; Lex.ReturnKeyword; Lex.Int(2); Lex.CloseBrace]
+let simple_token_list = [Tok.IntKeyword; Tok.Id("main"); Tok.OpenParen; Tok.CloseParen; Tok.OpenBrace; Tok.ReturnKeyword; Tok.Int(2); Tok.CloseBrace]
 let simple_ast = 
     let ret = Ast.ReturnVal(Ast.Const(Ast.Int(2))) in
     let body = Ast.Body([ret]) in
@@ -76,9 +83,9 @@ let simple_ast =
     let simple_fun = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
     Ast.Prog(simple_fun)
 
-let fun_arg_token_list = [Lex.IntKeyword; Lex.Id("main"); 
-                        Lex.OpenParen; Lex.IntKeyword; Lex.Id("argc"); Lex.CloseParen; 
-                        Lex.OpenBrace; Lex.ReturnKeyword; Lex.Int(2); Lex.CloseBrace]
+let fun_arg_token_list = [Tok.IntKeyword; Tok.Id("main"); 
+                        Tok.OpenParen; Tok.IntKeyword; Tok.Id("argc"); Tok.CloseParen; 
+                        Tok.OpenBrace; Tok.ReturnKeyword; Tok.Int(2); Tok.CloseBrace]
 let fun_arg_ast = 
     let ret = Ast.ReturnVal(Ast.Const(Ast.Int(2))) in
     let body = Ast.Body([ret]) in
@@ -87,9 +94,9 @@ let fun_arg_ast =
     let simple_fun = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
     Ast.Prog(simple_fun)
 
-let return_char_tokens = [Lex.IntKeyword; Lex.Id("main"); 
-                        Lex.OpenParen; Lex.IntKeyword; Lex.Id("argc"); Lex.CloseParen; 
-                        Lex.OpenBrace; Lex.ReturnKeyword; Lex.Char('a'); Lex.CloseBrace]
+let return_char_tokens = [Tok.IntKeyword; Tok.Id("main"); 
+                        Tok.OpenParen; Tok.IntKeyword; Tok.Id("argc"); Tok.CloseParen; 
+                        Tok.OpenBrace; Tok.ReturnKeyword; Tok.Char('a'); Tok.CloseBrace]
 
 let return_char_ast = 
     let ret = Ast.ReturnVal(Ast.Const(Ast.Char('a'))) in
@@ -99,7 +106,7 @@ let return_char_ast =
     let simple_fun = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
     Ast.Prog(simple_fun)
 
-let bad_token_list = [Lex.IntKeyword]
+let bad_token_list = [Tok.IntKeyword]
 
 let parse_tests = [
     "test_simple_parse" >:: test_compare_asts simple_token_list simple_ast;
