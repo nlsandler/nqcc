@@ -17,12 +17,34 @@ let rec parse_fun_params = function
         (Ast.Param(Ast.CharType, Ast.ID(name))::other_params, rest)
     | _ -> failwith("Parse error in parse_fun_params")
 
-let parse_exp = function
+let rec parse_exp toks =
+    match toks with
+    | (Tok.Int i)::(Tok.Plus)::rest -> 
+        let e1 = Ast.Const(Ast.Int i) in
+        let e2, rest = parse_exp rest in
+        (Ast.BinOp(Ast.Add, e1, e2), rest)
+    | (Tok.Char c)::(Tok.Plus)::rest -> 
+        let e1 = Ast.Const(Ast.Char c) in
+        let e2, rest = parse_exp rest in
+        (Ast.BinOp(Ast.Add, e1, e2), rest)
+    | Tok.OpenParen::rest ->
+        let e1, rest = parse_exp rest  in
+        (match rest with
+        | Tok.CloseParen::Tok.Plus::rest_of_exp ->
+            let e2, rest = parse_exp rest_of_exp in
+            (Ast.BinOp(Ast.Add, e1, e2), rest)
+        | Tok.CloseParen::rest_after_exp -> (e1, rest_after_exp)
+        | _ -> failwith("PANIC!!!!") )
+    | (Tok.Int i)::rest -> (Ast.Const(Ast.Int i), rest)
+    | (Tok.Char c)::rest -> (Ast.Const(Ast.Char c), rest)
+    | _ -> failwith("PANIC2!!")
+
+(*
     | (Tok.Int i)::rest -> (Ast.Const(Ast.Int(i)), rest)
     | (Tok.Char c)::rest -> (Ast.Const(Ast.Char(c)), rest)
     | tok::rest -> failwith("Unrecognized token "^(Lex.tok_to_string tok)^" in parse_exp")
     | [] -> failwith("Expected expression in parse_exp but none found")
-
+*)
 let rec parse_statement_list tokens =
     match tokens with
     | Tok.Semicolon::rest -> parse_statement_list rest

@@ -74,6 +74,7 @@ let test_compare_asts tokens expected_ast test_ctxt =
     let actual_ast = Parse.parse tokens in
     assert_bool "Mismatched ASTs" (compare_asts expected_ast actual_ast)
 
+
 let simple_token_list = [Tok.IntKeyword; Tok.Id("main"); Tok.OpenParen; Tok.CloseParen; Tok.OpenBrace; Tok.ReturnKeyword; Tok.Int(2); Tok.CloseBrace]
 let simple_ast = 
     let ret = Ast.ReturnVal(Ast.Const(Ast.Int(2))) in
@@ -106,11 +107,39 @@ let return_char_ast =
     let simple_fun = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
     Ast.Prog(simple_fun)
 
+let addition_tokens = [Tok.IntKeyword; Tok.Id("main"); Tok.OpenParen; Tok.CloseParen; 
+                        Tok.OpenBrace; Tok.ReturnKeyword; Tok.Int(1); Tok.Plus; Tok.Int(2); Tok.CloseBrace]
+
+let addition_ast = 
+    let binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let ret = Ast.ReturnVal(binop) in
+    let body = Ast.Body([ret]) in
+    let params = [] in
+    let fun_name = Ast.ID("main") in
+    let simple_fun = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
+    Ast.Prog(simple_fun)
+
+let multi_addition_tokens = Lex.lex "int main() {return 1+2+3;}"
+
+let nested_addition_tokens = Lex.lex "int main(){return 1+(2+3);}"
+let nested_addition_ast =
+    let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(2)), Ast.Const(Ast.Int(3))) in
+    let outer_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), inner_binop) in
+    let ret = Ast.ReturnVal(outer_binop) in
+    let body = Ast.Body([ret]) in
+    let params = [] in
+    let fun_name = Ast.ID("main") in
+    let nested_fun = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
+    Ast.Prog(nested_fun)    
+
 let bad_token_list = [Tok.IntKeyword]
 
 let parse_tests = [
     "test_simple_parse" >:: test_compare_asts simple_token_list simple_ast;
     "test_fun_args" >:: test_compare_asts fun_arg_token_list fun_arg_ast;
     "test_return_char" >:: test_compare_asts return_char_tokens return_char_ast;
+    "test_addition" >:: test_compare_asts addition_tokens addition_ast;
+    "test_nested_addition" >:: test_compare_asts nested_addition_tokens nested_addition_ast;
+
     "test_parse_fail" >:: test_expect_failure bad_token_list "Parse error in parse_fun: bad function type or name"
 ]
