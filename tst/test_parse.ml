@@ -51,13 +51,21 @@ let compare_asts expected actual =
 
 
 (* Actual tests *)
+(*
+let print_test_failure expected actual =
+    let _ = print_string "Expected AST:\n" in
+    let _ = Pprint.pprint expected in
+    let _ = print_string "Actual AST:\n" in
+    let _ = Pprint.pprint actual in
+    "Mismatched AST"
+*)
 let test_expect_failure input fail_msg test_ctxt =
     let f =  fun () -> Parse.parse input in
     assert_raises (Failure fail_msg) f
 
 let test_compare_asts tokens expected_ast test_ctxt =
     let actual_ast = Parse.parse tokens in
-    assert_bool "Mismatched AST" (compare_asts expected_ast actual_ast)
+    assert_bool "Mismatched ASTs" (compare_asts expected_ast actual_ast)
 
 let simple_token_list = [Lex.IntKeyword; Lex.Id("main"); Lex.OpenParen; Lex.CloseParen; Lex.OpenBrace; Lex.ReturnKeyword; Lex.Int(2); Lex.CloseBrace]
 let simple_ast = 
@@ -84,7 +92,7 @@ let return_char_tokens = [Lex.IntKeyword; Lex.Id("main");
                         Lex.OpenBrace; Lex.ReturnKeyword; Lex.Char('a'); Lex.CloseBrace]
 
 let return_char_ast = 
-    let ret = Ast.ReturnVal(Ast.Const(Ast.Char('c'))) in
+    let ret = Ast.ReturnVal(Ast.Const(Ast.Char('a'))) in
     let body = Ast.Body([ret]) in
     let params = [Ast.Param(Ast.IntType, Ast.ID("argc"))] in
     let fun_name = Ast.ID("main") in
