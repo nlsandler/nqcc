@@ -6,6 +6,14 @@ let test_lex_single input expected_tok test_ctxt =
     assert_equal 1 (List.length tokenized);
     assert_equal (expected_tok) (List.hd tokenized)
 
+let test_lex_multi input expected_toks test_ctxt =
+    let tokenized = Lex.lex input in
+    let rec compare_token_lists a b =
+        match a with
+        | [] -> assert_equal b []
+        | head::tail -> assert_equal (List.hd b) head; compare_token_lists tail (List.tl b) in
+    compare_token_lists tokenized expected_toks
+
 let test_expect_failure input fail_msg test_ctxt =
     let f =  fun () -> Lex.lex input in
     assert_raises (Failure fail_msg) f
@@ -59,10 +67,29 @@ let lex_id_tests = [
     "test_lex_id_hyphen" >:: test_expect_failure "abc-def" "Syntax error: \"-def\" is not valid."; (* TODO: Valid in the future *)
     "test_lex_id_at" >:: test_expect_failure "abc@def" "Syntax error: \"@def\" is not valid.";
     "test_lex_id_money" >:: test_expect_failure "abc$def" "Syntax error: \"$def\" is not valid.";
+    "test_lex_id_hash" >:: test_expect_failure "abc#def" "Syntax error: \"#def\" is not valid.";
 ]
 
-(*
-    | Id of string
-*)
+(* NOTE: we do NOT test newline handling because all newlines are removed when we read in the input file *)
 
-let lex_tests = lex_char_tests@lex_int_tests@lex_keyword_tests@lex_punctuation_tests@lex_id_tests
+let lex_whitespace_tests = [
+    "test_leading_whitespace" >:: test_lex_single "   foo" (Lex.Id("foo"));
+    "test_leading_tab" >:: test_lex_single "\t foo" (Lex.Id("foo"));
+    "test_trailing_whitespace" >:: test_lex_single "-123  " (Lex.Int(-123));
+    "test_trailing_tab" >:: test_lex_single "0x81\t" (Lex.Int(0x81));
+]
+
+let lex_multi_tests = [
+    "test_lex_brace_id" >:: test_lex_multi "}foo" [Lex.CloseBrace; Lex.Id("foo")];
+    "test_lex_brace_id_whitespace" >:: test_lex_multi "} bar" [Lex.CloseBrace; Lex.Id("bar")];
+    "test_lex_multi_semicolon" >:: test_lex_multi "bar;34" [Lex.Id("bar"); Lex.Semicolon; Lex.Int(34)];
+    "test_lex_kw_space" >:: test_lex_multi "return 2" [Lex.ReturnKeyword; Lex.Int(2)];
+    "test_lex_kw_nospace" >:: test_lex_multi "return2" [Lex.Id("return2")];
+    "test_lex_tab" >:: test_lex_multi "int\tmain" [Lex.IntKeyword; Lex.Id("main")];
+    "test_lex_some_spaces" >:: test_lex_multi "under_score main(  a char\t ){ return}; ;\tf;oo"
+        [Lex.Id("under_score"); Lex.Id("main"); Lex.OpenParen; Lex.Id("a"); Lex.CharKeyword; Lex.CloseParen;
+        Lex.OpenBrace; Lex.ReturnKeyword; Lex.CloseBrace; Lex.Semicolon; Lex.Semicolon; Lex.Id("f");
+        Lex.Semicolon; Lex.Id("oo")]
+]
+
+let lex_tests = lex_char_tests@lex_int_tests@lex_keyword_tests@lex_punctuation_tests@lex_id_tests@lex_whitespace_tests@lex_multi_tests
