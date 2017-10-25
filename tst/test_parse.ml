@@ -105,6 +105,7 @@ let addition_ast =
 
 let multi_addition_tokens = Lex.lex "int main() {return 1+2+3;}"
 let multi_addition_ast =
+    (* NOTE: this is actually wrong, addition in C is left-associative *)
     let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(2)), Ast.Const(Ast.Int(3))) in
     let outer_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), inner_binop) in
     let params = [] in
@@ -113,8 +114,31 @@ let multi_addition_ast =
 let nested_addition_tokens = Lex.lex "int main(){return 1+(2+3);}"
 let nested_addition_ast = multi_addition_ast
 
+let lots_of_parens_tokens = Lex.lex "int main(){return ((3));}"
+let lots_of_parens_ast = make_ast [] (Ast.Const(Ast.Int(3)))
+
+let left_nested_addition_tokens = Lex.lex "int main() {return (1+2)+3;}"
+let left_nested_addition_ast =
+    let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let outer_binop = Ast.BinOp(Ast.Add, inner_binop, Ast.Const(Ast.Int(3))) in
+    let params = [] in
+    make_ast params outer_binop
+
+let lots_of_parens_add_tokens = Lex.lex "int main(){return ((1+2));}"
+let lots_of_parens_add_ast = 
+    let e1 = Ast.Const(Ast.Int(1)) in
+    let e2 = Ast.Const(Ast.Int(2)) in
+    let ret_exp = Ast.BinOp(Ast.Add, e1, e2) in
+    make_ast [] ret_exp
+
 let bad_token_list = [Tok.IntKeyword]
 let missing_semicolon = Lex.lex "int main(){return 2}"
+
+let incomplete_addition = Lex.lex "int main(){return 2+;}"
+let mismatched_parens = Lex.lex "int main() {return ((1);}"
+let mismatched_right_parens = Lex.lex "int main() {return (1));}"
+let one_paren = Lex.lex "int main() {return (1;}"
+let backwards_parens = Lex.lex "int main() {return )1+2;}"
 
 let parse_tests = [
     "test_simple_parse" >:: test_compare_asts simple_token_list simple_ast;
@@ -122,6 +146,14 @@ let parse_tests = [
     "test_return_char" >:: test_compare_asts return_char_tokens return_char_ast;
     "test_addition" >:: test_compare_asts addition_tokens addition_ast;
     "test_nested_addition" >:: test_compare_asts nested_addition_tokens nested_addition_ast;
+    "test_lots_of_parens" >:: test_compare_asts lots_of_parens_tokens lots_of_parens_ast;
+    "test_left_nested_addition" >:: test_compare_asts left_nested_addition_tokens left_nested_addition_ast;
+    "test_lots_of_parens_add" >:: test_compare_asts lots_of_parens_add_tokens lots_of_parens_add_ast;
     "test_parse_fail" >:: test_expect_failure bad_token_list "Parse error in parse_fun: bad function type or name";
-    "test_semicolon_required" >:: test_expect_failure missing_semicolon "Expected semicolon at end of statement"
+    "test_semicolon_required" >:: test_expect_failure missing_semicolon "Expected semicolon at end of statement";
+    "test_incomplete_addition" >:: test_expect_failure incomplete_addition "Invalid expression";
+    "test_mismatched_parens" >:: test_expect_failure mismatched_parens "Missing ')'";
+    "test_mismatched_right_parens" >:: test_expect_failure mismatched_right_parens "Expected semicolon at end of statement";    
+    "test_one_paren" >:: test_expect_failure one_paren "Missing ')'";
+    "test_backwards_parens" >:: test_expect_failure backwards_parens "Invalid expression";
 ]

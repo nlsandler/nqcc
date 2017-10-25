@@ -34,10 +34,10 @@ let rec parse_exp toks =
             let e2, rest = parse_exp rest_of_exp in
             (Ast.BinOp(Ast.Add, e1, e2), rest)
         | Tok.CloseParen::rest_after_exp -> (e1, rest_after_exp)
-        | _ -> failwith("PANIC!!!!") )
+        | _ -> failwith("Missing ')'") )
     | (Tok.Int i)::rest -> (Ast.Const(Ast.Int i), rest)
     | (Tok.Char c)::rest -> (Ast.Const(Ast.Char c), rest)
-    | _ -> failwith("PANIC2!!")
+    | _ -> failwith("Invalid expression")
 
 (*
     | (Tok.Int i)::rest -> (Ast.Const(Ast.Int(i)), rest)
