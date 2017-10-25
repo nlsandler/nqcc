@@ -47,15 +47,13 @@ let rec parse_exp toks =
 *)
 let rec parse_statement_list tokens =
     match tokens with
-    | Tok.Semicolon::rest -> parse_statement_list rest
-    | Tok.ReturnKeyword::Tok.Semicolon::rest -> 
-        let other_statements, rest = parse_statement_list rest in
-        Ast.Return::other_statements, rest
+    | Tok.ReturnKeyword::Tok.Semicolon::rest -> [Ast.Return], rest
     | Tok.ReturnKeyword::rest ->
         let exp, rest = parse_exp rest in
-        let other_statements, rest = parse_statement_list rest in
-        Ast.ReturnVal(exp)::other_statements, rest
-    | _ -> ([], tokens) (* Whatever is left isn't part of statement list *)
+            if (List.hd rest == Tok.Semicolon)
+            then [Ast.ReturnVal(exp)], List.tl rest
+            else failwith("Expected semicolon at end of statement")
+    | _ -> failwith("Invalid statement")
 
 let parse_fun_body tokens = (* Assume for now there's nothing after function body *)
     let statements, rest = parse_statement_list tokens in

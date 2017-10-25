@@ -81,7 +81,7 @@ let make_ast params exp =
     let f = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
     Ast.Prog(f)
 
-let simple_token_list = Lex.lex "int main(){return 2}"
+let simple_token_list = Lex.lex "int main(){return 2;}"
 let simple_ast = make_ast [] (Ast.Const(Ast.Int(2)))
 
 let fun_arg_token_list = Lex.lex "int main(int argc){return 2;}"
@@ -90,7 +90,7 @@ let fun_arg_ast =
     let return_exp = Ast.Const(Ast.Int(2)) in
     make_ast params return_exp
 
-let return_char_tokens = Lex.lex "int main(int argc){return 'a'}"
+let return_char_tokens = Lex.lex "int main(int argc){return 'a';}"
 let return_char_ast =
     let params = [Ast.Param(Ast.IntType, Ast.ID("argc"))] in
     let return_exp = Ast.Const(Ast.Char('a')) in
@@ -114,6 +114,7 @@ let nested_addition_tokens = Lex.lex "int main(){return 1+(2+3);}"
 let nested_addition_ast = multi_addition_ast
 
 let bad_token_list = [Tok.IntKeyword]
+let missing_semicolon = Lex.lex "int main(){return 2}"
 
 let parse_tests = [
     "test_simple_parse" >:: test_compare_asts simple_token_list simple_ast;
@@ -121,6 +122,6 @@ let parse_tests = [
     "test_return_char" >:: test_compare_asts return_char_tokens return_char_ast;
     "test_addition" >:: test_compare_asts addition_tokens addition_ast;
     "test_nested_addition" >:: test_compare_asts nested_addition_tokens nested_addition_ast;
-
-    "test_parse_fail" >:: test_expect_failure bad_token_list "Parse error in parse_fun: bad function type or name"
+    "test_parse_fail" >:: test_expect_failure bad_token_list "Parse error in parse_fun: bad function type or name";
+    "test_semicolon_required" >:: test_expect_failure missing_semicolon "Expected semicolon at end of statement"
 ]
