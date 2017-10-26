@@ -20,8 +20,9 @@ let const_to_string = function
     | Ast.Char c -> Printf.sprintf "Char<%c>" c
     | Ast.String s -> Printf.sprintf "String<%s>" s
 
-let exp_to_string = function
+let rec exp_to_string = function
     | Ast.Const c -> const_to_string c
+    | Ast.BinOp(Ast.Add, e1, e2) -> Printf.sprintf "%s + %s" (exp_to_string e1) (exp_to_string e2)
 
 let pprint_stmt = function
     | Ast.Return -> print_string "\t\tRETURN\n"

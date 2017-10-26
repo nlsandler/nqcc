@@ -10,17 +10,23 @@ let generate filename prog =
     let _ = Printf.fprintf chan "    .globl _main\n" in
 
     (* generate code to execute expression and move result into eax *)
-    let generate_exp = function
-    | Ast.Const(Ast.Int i) -> 
-        Printf.fprintf chan "    movl    $%d, %%eax\n" i;
-    | Ast.Const(Ast.Char c) ->
-        Printf.fprintf chan "    movl    $%d, %%eax\n" (Char.code c);
-    | _ -> failwith("Constant not supported") in
+    let rec generate_exp exp stack_index =
+        match exp with
+        | Ast.BinOp(Ast.Add, e1, e2) ->
+            generate_exp e1 stack_index;
+            Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index;
+            generate_exp e2 (stack_index - 4);
+            Printf.fprintf chan "    addl %d(%%esp), %%eax\n" stack_index
+        | Ast.Const(Ast.Int i) -> 
+            Printf.fprintf chan "    movl    $%d, %%eax\n" i;
+        | Ast.Const(Ast.Char c) ->
+            Printf.fprintf chan "    movl    $%d, %%eax\n" (Char.code c);
+        | _ -> failwith("Constant not supported") in
 
     let generate_statement = function
     | Ast.Return -> Printf.fprintf chan "    ret"
     | Ast.ReturnVal exp -> 
-        let _ = generate_exp exp in
+        let _ = generate_exp exp (-4) in
         Printf.fprintf chan "    ret" in
 
     let generate_statements statements = List.iter generate_statement statements in
