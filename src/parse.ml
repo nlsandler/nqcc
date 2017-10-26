@@ -17,17 +17,22 @@ let rec parse_fun_params = function
         (Ast.Param(Ast.CharType, Ast.ID(name))::other_params, rest)
     | _ -> failwith("Parse error in parse_fun_params")
 
+let tok_to_const = function
+    | Tok.Int i -> Ast.Const(Ast.Int i)
+    | Tok.Char c -> Ast.Const(Ast.Char c)
+    | _ -> failwith("Not a constant") 
+
+
 let rec parse_exp toks =
     match toks with
     | tok::(Tok.Plus)::rest ->
-        let const = 
-            match tok with
-            | Tok.Int i -> Ast.Int i
-            | Tok.Char c -> Ast.Char c
-            | _ -> failwith("Syntax error") in
-        let e1 = Ast.Const(const) in
+        let e1 = tok_to_const tok in
         let e2, rest = parse_exp rest in
         (Ast.BinOp(Ast.Add, e1, e2), rest)
+    | tok::(Tok.Mult)::rest ->
+        let e1 = tok_to_const tok in
+        let e2, rest = parse_exp rest in
+        (Ast.BinOp(Ast.Mult, e1, e2), rest)
     | Tok.OpenParen::rest ->
         let e1, rest = parse_exp rest  in
         (match rest with
@@ -36,8 +41,8 @@ let rec parse_exp toks =
             (Ast.BinOp(Ast.Add, e1, e2), rest)
         | Tok.CloseParen::rest_after_exp -> (e1, rest_after_exp)
         | _ -> failwith("Missing ')'") )
-    | (Tok.Int i)::rest -> (Ast.Const(Ast.Int i), rest)
-    | (Tok.Char c)::rest -> (Ast.Const(Ast.Char c), rest)
+    | (Tok.Int i) as t::rest -> (tok_to_const t, rest)
+    | (Tok.Char c) as t::rest -> (tok_to_const t, rest)
     | _ -> failwith("Invalid expression")
 
 (*

@@ -12,11 +12,15 @@ let generate filename prog =
     (* generate code to execute expression and move result into eax *)
     let rec generate_exp exp stack_index =
         match exp with
-        | Ast.BinOp(Ast.Add, e1, e2) ->
+        | Ast.BinOp(op, e1, e2) ->
+            let opcode = 
+                match op with
+                | Ast.Add -> "addl"
+                | Ast.Mult -> "imul" in
             generate_exp e1 stack_index;
             Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index;
             generate_exp e2 (stack_index - 4);
-            Printf.fprintf chan "    addl %d(%%esp), %%eax\n" stack_index
+            Printf.fprintf chan "    %s %d(%%esp), %%eax\n" opcode stack_index
         | Ast.Const(Ast.Int i) -> 
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
         | Ast.Const(Ast.Char c) ->

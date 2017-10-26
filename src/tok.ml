@@ -9,6 +9,7 @@ type token =
     | CharKeyword
     | ReturnKeyword
     | Plus
+    | Mult
     | Int of int
     | Char of char
     | Id of string
