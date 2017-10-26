@@ -19,12 +19,13 @@ let rec parse_fun_params = function
 
 let rec parse_exp toks =
     match toks with
-    | (Tok.Int i)::(Tok.Plus)::rest -> 
-        let e1 = Ast.Const(Ast.Int i) in
-        let e2, rest = parse_exp rest in
-        (Ast.BinOp(Ast.Add, e1, e2), rest)
-    | (Tok.Char c)::(Tok.Plus)::rest -> 
-        let e1 = Ast.Const(Ast.Char c) in
+    | tok::(Tok.Plus)::rest ->
+        let const = 
+            match tok with
+            | Tok.Int i -> Ast.Int i
+            | Tok.Char c -> Ast.Char c
+            | _ -> failwith("Syntax error") in
+        let e1 = Ast.Const(const) in
         let e2, rest = parse_exp rest in
         (Ast.BinOp(Ast.Add, e1, e2), rest)
     | Tok.OpenParen::rest ->
