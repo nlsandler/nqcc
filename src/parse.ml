@@ -22,8 +22,41 @@ let tok_to_const = function
     | Tok.Char c -> Ast.Const(Ast.Char c)
     | _ -> failwith("Not a constant") 
 
+let rec parse_factor toks =
+    match toks with
+    | Tok.OpenParen::factor -> 
+        let exp, after_exp = parse_exp factor in
+        (match after_exp with
+        | (Tok.CloseParen)::rest -> (exp, rest)
+        | _ -> failwith("Syntax error: expected close paren"))
+    | Tok.Int(i)::rest -> Ast.Const(Ast.Int(i)), rest
+    | Tok.Char(c)::rest -> Ast.Const(Ast.Char(c)), rest
+    | _ -> failwith("Failed to parse factor")
 
-let rec parse_exp toks =
+and build_term left_factor toks =
+    match toks with
+    | (Tok.Mult)::right ->
+        let right_factor, rest = parse_factor right in
+        let left_factor = (Ast.BinOp(Ast.Mult, left_factor, right_factor)) in
+        build_term left_factor rest
+    | _ -> left_factor, toks
+
+and parse_term toks =
+    let left, rest = parse_factor toks in
+    build_term left rest
+
+and build_exp left_term toks =
+    match toks with
+    | (Tok.Plus)::right -> 
+        let right_term, rest = parse_term right in
+        let left_term = (Ast.BinOp(Ast.Add, left_term, right_term)) in
+        build_exp left_term rest
+    | _ -> left_term, toks 
+
+and parse_exp toks =
+    let left, rest = parse_term toks in
+    build_exp left rest
+(*
     match toks with
     | tok::(Tok.Plus)::rest ->
         let e1 = tok_to_const tok in
@@ -44,12 +77,6 @@ let rec parse_exp toks =
     | (Tok.Int i) as t::rest -> (tok_to_const t, rest)
     | (Tok.Char c) as t::rest -> (tok_to_const t, rest)
     | _ -> failwith("Invalid expression")
-
-(*
-    | (Tok.Int i)::rest -> (Ast.Const(Ast.Int(i)), rest)
-    | (Tok.Char c)::rest -> (Ast.Const(Ast.Char(c)), rest)
-    | tok::rest -> failwith("Unrecognized token "^(Lex.tok_to_string tok)^" in parse_exp")
-    | [] -> failwith("Expected expression in parse_exp but none found")
 *)
 let rec parse_statement_list tokens =
     match tokens with

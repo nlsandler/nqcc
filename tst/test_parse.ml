@@ -27,6 +27,8 @@ let compare_consts expected actual =
 let compare_ops expected actual =
     match expected, actual with 
     | Ast.Add, Ast.Add -> true
+    | Ast.Mult, Ast.Mult -> true
+    | _ -> false
 
 let rec compare_exps expected actual =
     match expected, actual with
@@ -106,13 +108,16 @@ let addition_ast =
 let multi_addition_tokens = Lex.lex "int main() {return 1+2+3;}"
 let multi_addition_ast =
     (* NOTE: this is actually wrong, addition in C is left-associative *)
-    let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(2)), Ast.Const(Ast.Int(3))) in
-    let outer_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), inner_binop) in
+    let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let outer_binop = Ast.BinOp(Ast.Add, inner_binop, Ast.Const(Ast.Int(3))) in
     let params = [] in
     make_ast params outer_binop
 
 let nested_addition_tokens = Lex.lex "int main(){return 1+(2+3);}"
-let nested_addition_ast = multi_addition_ast
+let nested_addition_ast =
+    let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(2)), Ast.Const(Ast.Int(3))) in
+    let outer_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), inner_binop) in
+    make_ast [] outer_binop
 
 let lots_of_parens_tokens = Lex.lex "int main(){return ((3));}"
 let lots_of_parens_ast = make_ast [] (Ast.Const(Ast.Int(3)))
@@ -130,6 +135,12 @@ let lots_of_parens_add_ast =
     let e2 = Ast.Const(Ast.Int(2)) in
     let ret_exp = Ast.BinOp(Ast.Add, e1, e2) in
     make_ast [] ret_exp
+
+let precedence_tokens = Lex.lex "int main() {return 1*2+3;}"
+let precedence_ast = 
+    let inner_binop = Ast.BinOp(Ast.Mult, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let outer_binop = Ast.BinOp(Ast.Add, inner_binop, Ast.Const(Ast.Int(3))) in
+    make_ast [] outer_binop
 
 let bad_token_list = [Tok.IntKeyword]
 let missing_semicolon = Lex.lex "int main(){return 2}"
@@ -149,11 +160,12 @@ let parse_tests = [
     "test_lots_of_parens" >:: test_compare_asts lots_of_parens_tokens lots_of_parens_ast;
     "test_left_nested_addition" >:: test_compare_asts left_nested_addition_tokens left_nested_addition_ast;
     "test_lots_of_parens_add" >:: test_compare_asts lots_of_parens_add_tokens lots_of_parens_add_ast;
+    "test_precedence" >:: test_compare_asts precedence_tokens precedence_ast;
     "test_parse_fail" >:: test_expect_failure bad_token_list "Parse error in parse_fun: bad function type or name";
     "test_semicolon_required" >:: test_expect_failure missing_semicolon "Expected semicolon at end of statement";
-    "test_incomplete_addition" >:: test_expect_failure incomplete_addition "Invalid expression";
-    "test_mismatched_parens" >:: test_expect_failure mismatched_parens "Missing ')'";
+    "test_incomplete_addition" >:: test_expect_failure incomplete_addition "Failed to parse factor";
+    "test_mismatched_parens" >:: test_expect_failure mismatched_parens "Syntax error: expected close paren";
     "test_mismatched_right_parens" >:: test_expect_failure mismatched_right_parens "Expected semicolon at end of statement";    
-    "test_one_paren" >:: test_expect_failure one_paren "Missing ')'";
-    "test_backwards_parens" >:: test_expect_failure backwards_parens "Invalid expression";
+    "test_one_paren" >:: test_expect_failure one_paren "Syntax error: expected close paren";
+    "test_backwards_parens" >:: test_expect_failure backwards_parens "Failed to parse factor";
 ]
