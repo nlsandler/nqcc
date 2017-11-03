@@ -6,7 +6,7 @@ type const =
 type type_def = 
     | IntType
     | CharType
-type op = Add | Mult
+type op = Add | Mult | Div
 type exp = 
     | Const of const
     | BinOp of op * exp * exp

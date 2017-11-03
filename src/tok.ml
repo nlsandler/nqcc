@@ -10,6 +10,7 @@ type token =
     | ReturnKeyword
     | Plus
     | Mult
+    | Div
     | Int of int
     | Char of char
     | Id of string

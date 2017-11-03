@@ -39,6 +39,10 @@ and build_term left_factor toks =
         let right_factor, rest = parse_factor right in
         let left_factor = (Ast.BinOp(Ast.Mult, left_factor, right_factor)) in
         build_term left_factor rest
+    | (Tok.Div)::right ->
+        let right_factor, rest = parse_factor right in
+        let left_factor = (Ast.BinOp(Ast.Div, left_factor, right_factor)) in
+        build_term left_factor rest    
     | _ -> left_factor, toks
 
 and parse_term toks =
