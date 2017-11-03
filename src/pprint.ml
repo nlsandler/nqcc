@@ -24,6 +24,7 @@ let op_to_string op =
     match op with
     | Ast.Add -> "+"
     | Ast.Mult -> "*"
+    | Ast.Div -> "/"
 
 let rec exp_to_string = function
     | Ast.Const c -> const_to_string c

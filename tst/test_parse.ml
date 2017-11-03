@@ -28,6 +28,7 @@ let compare_ops expected actual =
     match expected, actual with 
     | Ast.Add, Ast.Add -> true
     | Ast.Mult, Ast.Mult -> true
+    | Ast.Div, Ast.Div -> true
     | _ -> false
 
 let rec compare_exps expected actual =
@@ -113,6 +114,11 @@ let multi_addition_ast =
     let params = [] in
     make_ast params outer_binop
 
+let division_tokens = Lex.lex "int main() {return 4/5;}"
+let division_ast =
+    let binop = Ast.BinOp(Ast.Div, Ast.Const(Ast.Int(4)), Ast.Const(Ast.Int(5))) in
+    make_ast [] binop
+
 let nested_addition_tokens = Lex.lex "int main(){return 1+(2+3);}"
 let nested_addition_ast =
     let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(2)), Ast.Const(Ast.Int(3))) in
@@ -129,6 +135,11 @@ let left_nested_addition_ast =
     let params = [] in
     make_ast params outer_binop
 
+let mult_tokens = Lex.lex "int main() {return 4*5;}"
+let mult_ast = 
+    let binop = Ast.BinOp(Ast.Mult, Ast.Const(Ast.Int(4)), Ast.Const(Ast.Int(5))) in
+    make_ast [] binop
+
 let lots_of_parens_add_tokens = Lex.lex "int main(){return ((1+2));}"
 let lots_of_parens_add_ast = 
     let e1 = Ast.Const(Ast.Int(1)) in
@@ -140,6 +151,12 @@ let precedence_tokens = Lex.lex "int main() {return 1*2+3;}"
 let precedence_ast = 
     let inner_binop = Ast.BinOp(Ast.Mult, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
     let outer_binop = Ast.BinOp(Ast.Add, inner_binop, Ast.Const(Ast.Int(3))) in
+    make_ast [] outer_binop
+
+let associativity_tokens = Lex.lex "int main() {return 1/2*3;}"
+let associativity_ast =
+    let inner_binop = Ast.BinOp(Ast.Div, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let outer_binop = Ast.BinOp(Ast.Mult, inner_binop, Ast.Const(Ast.Int(3))) in
     make_ast [] outer_binop
 
 let bad_token_list = [Tok.IntKeyword]
@@ -156,11 +173,14 @@ let parse_tests = [
     "test_fun_args" >:: test_compare_asts fun_arg_token_list fun_arg_ast;
     "test_return_char" >:: test_compare_asts return_char_tokens return_char_ast;
     "test_addition" >:: test_compare_asts addition_tokens addition_ast;
+    "test_multiplication" >:: test_compare_asts mult_tokens mult_ast;
+    "test_division" >:: test_compare_asts division_tokens division_ast;
     "test_nested_addition" >:: test_compare_asts nested_addition_tokens nested_addition_ast;
     "test_lots_of_parens" >:: test_compare_asts lots_of_parens_tokens lots_of_parens_ast;
     "test_left_nested_addition" >:: test_compare_asts left_nested_addition_tokens left_nested_addition_ast;
     "test_lots_of_parens_add" >:: test_compare_asts lots_of_parens_add_tokens lots_of_parens_add_ast;
     "test_precedence" >:: test_compare_asts precedence_tokens precedence_ast;
+    "test_associativity" >:: test_compare_asts associativity_tokens associativity_ast;
     "test_parse_fail" >:: test_expect_failure bad_token_list "Parse error in parse_fun: bad function type or name";
     "test_semicolon_required" >:: test_expect_failure missing_semicolon "Expected semicolon at end of statement";
     "test_incomplete_addition" >:: test_expect_failure incomplete_addition "Failed to parse factor";
