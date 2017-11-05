@@ -17,8 +17,7 @@ let generate filename prog =
             let _ = Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index in
             let _ = generate_exp e2 (stack_index - 4) in
             let _ =
-                if (op == Ast.Div || op == Ast.Sub)
-                then begin(* swap eax w/ stack *) 
+                begin(* op s, d computes d = op(d,s), so swap eax w/ stack *) 
                     Printf.fprintf chan "    movl %%eax, %%edx\n";
                     (* Put e1 in eax (where it needs to be for idiv) *)
                     Printf.fprintf chan "    movl %d(%%esp), %%eax\n" stack_index;
