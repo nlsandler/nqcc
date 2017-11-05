@@ -29,6 +29,9 @@ let rec parse_factor toks =
         (match after_exp with
         | (Tok.CloseParen)::rest -> (exp, rest)
         | _ -> failwith("Syntax error: expected close paren"))
+    | Tok.Minus::factor ->
+        let num, rest = parse_factor factor in
+        Ast.UnOp(Ast.Negate, num), rest
     | Tok.Int(i)::rest -> Ast.Const(Ast.Int(i)), rest
     | Tok.Char(c)::rest -> Ast.Const(Ast.Char(c)), rest
     | _ -> failwith("Failed to parse factor")
@@ -55,6 +58,10 @@ and build_exp left_term toks =
         let right_term, rest = parse_term right in
         let left_term = (Ast.BinOp(Ast.Add, left_term, right_term)) in
         build_exp left_term rest
+    | (Tok.Minus)::right ->
+        let right_term, rest = parse_term right in
+        let left_term = (Ast.BinOp(Ast.Sub, left_term, right_term)) in
+        build_exp left_term rest        
     | _ -> left_term, toks 
 
 and parse_exp toks =

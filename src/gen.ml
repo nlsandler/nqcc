@@ -13,32 +13,29 @@ let generate filename prog =
     let rec generate_exp exp stack_index =
         match exp with
         | Ast.BinOp(op, e1, e2) ->
-            let opcode = 
-                match op with
-                | Ast.Add -> "addl"
-                | Ast.Mult -> "imul"
-                | Ast.Div -> "idiv" in
-            generate_exp e1 stack_index;
-            Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index;
-            generate_exp e2 (stack_index - 4);
-            if (op == Ast.Div)
-            then
-                begin
-                    (* idivl calculates 64-bit value edx:eax / operand, so move operands to the right registers *)
-                    
-                    (* Put e2 into edx temporarily *)
+            let _ = generate_exp e1 stack_index in
+            let _ = Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index in
+            let _ = generate_exp e2 (stack_index - 4) in
+            let _ =
+                if (op == Ast.Div || op == Ast.Sub)
+                then begin(* swap eax w/ stack *) 
                     Printf.fprintf chan "    movl %%eax, %%edx\n";
                     (* Put e1 in eax (where it needs to be for idiv) *)
                     Printf.fprintf chan "    movl %d(%%esp), %%eax\n" stack_index;
                     (* Now put e2 in esp, overwriting where e1 WAS on the stack *)
                     Printf.fprintf chan "    movl %%edx, %d(%%esp)\n" stack_index;
-                    (* zero out edx *)
+                end in
+            (match op with 
+            | Ast.Div ->                        
+                    (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
                     Printf.fprintf chan "    xor %%edx, %%edx\n";
-                    (* Actually perform division *)
                     Printf.fprintf chan "    idivl %d(%%esp)\n" stack_index;
-                end
-            else 
-                Printf.fprintf chan "    %s %d(%%esp), %%eax\n" opcode stack_index
+            | Ast.Sub -> Printf.fprintf chan "    subl %d(%%esp), %%eax\n" stack_index;
+            | Ast.Add -> Printf.fprintf chan "    addl %d(%%esp), %%eax\n" stack_index;
+            | Ast.Mult -> Printf.fprintf chan "    imul %d(%%esp), %%eax\n" stack_index;)
+        | Ast.UnOp(Ast.Negate, e) ->
+            generate_exp e stack_index;
+            Printf.fprintf chan "    neg %%eax\n";
         | Ast.Const(Ast.Int i) -> 
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
         | Ast.Const(Ast.Char c) ->

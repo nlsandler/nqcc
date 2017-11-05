@@ -3,13 +3,12 @@ open Batteries
 (*
     int_regexp: (-?([0-9]+)|(0x[0-9a-f]+))(\b.* )
     in other words:
-    -optional negative
     -one or more digits, OR
     -0x followed by one or more hex digits (0-9, a-f)
     -everything else
     all case insensitive
 *) 
-let int_regexp = Str.regexp_case_fold "\\(-?\\([0-9]+\\)\\|\\(0x[0-9a-f]+\\)\\)\\(\\b.*\\)"
+let int_regexp = Str.regexp_case_fold "\\(\\([0-9]+\\)\\|\\(0x[0-9a-f]+\\)\\)\\(\\b.*\\)"
 (*
     id_regexp: ([A-Za-z][A-Za-z0-9_]* )(\b.* ) 
 *)
@@ -102,6 +101,8 @@ let rec lex input =
                 | ')'::rest -> (Tok.CloseParen, String.implode rest)
                 | ';'::rest -> (Tok.Semicolon, String.implode rest)
                 | '+'::rest -> (Tok.Plus, String.implode rest)
+                | '-'::'-'::rest -> failwith("decrement not yet implemented")
+                | '-'::rest -> (Tok.Minus, String.implode rest)
                 | '*'::rest -> (Tok.Mult, String.implode rest)
                 | '/'::rest -> (Tok.Div, String.implode rest)
                 | _ -> get_const_or_id input in
@@ -115,6 +116,7 @@ let tok_to_string t =
     | Tok.CloseParen -> ")"
     | Tok.Semicolon -> ";"
     | Tok.Plus -> "+"
+    | Tok.Minus -> "-"
     | Tok.Mult -> "*"
     | Tok.Div -> "/"
     | Tok.IntKeyword -> "INT"

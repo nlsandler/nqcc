@@ -24,18 +24,13 @@ let compare_consts expected actual =
     | Ast.Char(c1), Ast.Char(c2) -> c1 == c2
     | _ -> false
 
-let compare_ops expected actual =
-    match expected, actual with 
-    | Ast.Add, Ast.Add -> true
-    | Ast.Mult, Ast.Mult -> true
-    | Ast.Div, Ast.Div -> true
-    | _ -> false
-
 let rec compare_exps expected actual =
     match expected, actual with
     | Ast.Const(expected_const), Ast.Const(actual_const) -> compare_consts expected_const actual_const
     | Ast.BinOp(expected_op, expected_e1, expected_e2), Ast.BinOp(actual_op, actual_e1, actual_e2) -> 
-        compare_ops expected_op actual_op && compare_exps expected_e1 actual_e1 && compare_exps expected_e2 actual_e2
+        (expected_op == actual_op) && compare_exps expected_e1 actual_e1 && compare_exps expected_e2 actual_e2
+    | Ast.UnOp(expected_op, expected_exp), Ast.UnOp(actual_op, actual_exp) ->
+        (expected_op == actual_op) && compare_exps expected_exp actual_exp
     | _ -> false
 
 let compare_statements expected actual = 
@@ -99,12 +94,27 @@ let return_char_ast =
     let return_exp = Ast.Const(Ast.Char('a')) in
     make_ast params return_exp
 
-let addition_tokens = Lex.lex "int main(){return 1+2;}"
+let negation_tokens = Lex.lex "int main(){ return -3;}"
+let negation_ast =
+    let unop = Ast.UnOp(Ast.Negate, Ast.Const(Ast.Int(3))) in
+    make_ast [] unop
 
+let addition_tokens = Lex.lex "int main(){return 1+2;}"
 let addition_ast = 
     let binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
     let params = [] in
     make_ast params binop
+
+let subtraction_tokens = Lex.lex "int main(){return 4-3;}"
+let subtraction_ast =
+    let binop = Ast.BinOp(Ast.Sub, Ast.Const(Ast.Int(4)), Ast.Const(Ast.Int(3))) in
+    make_ast [] binop
+
+let subtract_negative_tokens = Lex.lex "int main(){return 4- -3;}"
+let subtract_negative_ast =
+    let unop = Ast.UnOp(Ast.Negate, Ast.Const(Ast.Int(3))) in
+    let binop = Ast.BinOp(Ast.Sub, Ast.Const(Ast.Int(4)), unop) in
+    make_ast [] binop
 
 let multi_addition_tokens = Lex.lex "int main() {return 1+2+3;}"
 let multi_addition_ast =
@@ -172,7 +182,10 @@ let parse_tests = [
     "test_simple_parse" >:: test_compare_asts simple_token_list simple_ast;
     "test_fun_args" >:: test_compare_asts fun_arg_token_list fun_arg_ast;
     "test_return_char" >:: test_compare_asts return_char_tokens return_char_ast;
+    "test_negation" >:: test_compare_asts negation_tokens negation_ast;
     "test_addition" >:: test_compare_asts addition_tokens addition_ast;
+    "test_subtraction" >:: test_compare_asts subtraction_tokens subtraction_ast;
+    "test_subtract_negative" >:: test_compare_asts subtract_negative_tokens subtract_negative_ast;
     "test_multiplication" >:: test_compare_asts mult_tokens mult_ast;
     "test_division" >:: test_compare_asts division_tokens division_ast;
     "test_nested_addition" >:: test_compare_asts nested_addition_tokens nested_addition_ast;

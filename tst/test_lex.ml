@@ -1,6 +1,6 @@
 open OUnit2
 
-(* create a test to lex a single tokenm *)
+(* create a test to lex a single token *)
 let test_lex_single input expected_tok test_ctxt =
     let tokenized = Lex.lex input in
     assert_equal 1 (List.length tokenized);
@@ -29,10 +29,8 @@ let lex_char_tests = [
 
 let lex_int_tests = [
     "test_lex_int" >:: test_lex_single "3" (Tok.Int(3));
-    "test_lex_int_neg" >:: test_lex_single "-3" (Tok.Int(-3));
     "test_lex_int_max" >:: test_lex_single "2147483647" (Tok.Int(2147483647));
     "test_lex_int_overflow" >:: test_expect_failure "2147483648" "Invalid int literal";
-    "test_lex_int_min" >:: test_lex_single "-2147483648" (Tok.Int(-2147483648));
     "test_lex_int_underflow" >:: test_expect_failure "-2147483649" "Invalid int literal";
     "test_lex_int_single_digit_hex" >:: test_lex_single "0xf" (Tok.Int(0xf));
     "test_lex_int_multi_digit_hex" >:: test_lex_single "0xaf42" (Tok.Int(0xaf42));
@@ -65,7 +63,6 @@ let lex_id_tests = [
     "test_lex_id_uppercase_int" >:: test_lex_single "INT" (Tok.Id("INT"));
     "test_lex_id_numeric" >:: test_lex_single "a123" (Tok.Id("a123"));
     "test_lex_id_numeric_start" >:: test_expect_failure "123a" "Syntax error: \"123a\" is not valid.";
-    "test_lex_id_hyphen" >:: test_expect_failure "abc-def" "Syntax error: \"-def\" is not valid."; (* TODO: Valid in the future *)
     "test_lex_id_at" >:: test_expect_failure "abc@def" "Syntax error: \"@def\" is not valid.";
     "test_lex_id_money" >:: test_expect_failure "abc$def" "Syntax error: \"$def\" is not valid.";
     "test_lex_id_hash" >:: test_expect_failure "abc#def" "Syntax error: \"#def\" is not valid.";
@@ -76,11 +73,12 @@ let lex_id_tests = [
 let lex_whitespace_tests = [
     "test_leading_whitespace" >:: test_lex_single "   foo" (Tok.Id("foo"));
     "test_leading_tab" >:: test_lex_single "\t foo" (Tok.Id("foo"));
-    "test_trailing_whitespace" >:: test_lex_single "-123  " (Tok.Int(-123));
+    "test_trailing_whitespace" >:: test_lex_single "123  " (Tok.Int(123));
     "test_trailing_tab" >:: test_lex_single "0x81\t" (Tok.Int(0x81));
 ]
 
 let lex_multi_tests = [
+    "test_lex_negative" >:: test_lex_multi "-1" [Tok.Minus; Tok.Int(1)];
     "test_lex_brace_id" >:: test_lex_multi "}foo" [Tok.CloseBrace; Tok.Id("foo")];
     "test_lex_brace_id_whitespace" >:: test_lex_multi "} bar" [Tok.CloseBrace; Tok.Id("bar")];
     "test_lex_multi_semicolon" >:: test_lex_multi "bar;34" [Tok.Id("bar"); Tok.Semicolon; Tok.Int(34)];

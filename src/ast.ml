@@ -6,10 +6,12 @@ type const =
 type type_def = 
     | IntType
     | CharType
-type op = Add | Mult | Div
+type binop = Add | Sub | Mult | Div
+type unop = Negate
 type exp = 
     | Const of const
-    | BinOp of op * exp * exp
+    | UnOp of unop * exp
+    | BinOp of binop * exp * exp
 type statement = 
     | Return
     | ReturnVal of exp (* should we add a return_exp instead? *)
