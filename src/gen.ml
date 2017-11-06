@@ -32,12 +32,12 @@ let generate filename prog =
             | Ast.Sub -> Printf.fprintf chan "    subl %d(%%esp), %%eax\n" stack_index;
             | Ast.Add -> Printf.fprintf chan "    addl %d(%%esp), %%eax\n" stack_index;
             | Ast.Mult -> Printf.fprintf chan "    imul %d(%%esp), %%eax\n" stack_index;)
-        | Ast.UnOp(Ast.Negate, e) ->
+        | Ast.UnOp(op, e) ->
             generate_exp e stack_index;
-            Printf.fprintf chan "    neg %%eax\n";
-        | Ast.UnOp(Ast.Pos, e) ->
-            (* No-op for now - eventually handle casting to int if needed *)
-            generate_exp e stack_index;
+            (match op with
+            | Ast.Pos -> ()(* No-op for now - eventually handle casting to int if needed *)
+            | Ast.Negate -> Printf.fprintf chan "    neg %%eax\n";
+            | Ast.Complement -> Printf.fprintf chan "    not %%eax\n";)
         | Ast.Const(Ast.Int i) -> 
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
         | Ast.Const(Ast.Char c) ->

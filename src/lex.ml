@@ -105,6 +105,7 @@ let rec lex input =
                 | '-'::rest -> (Tok.Minus, String.implode rest)
                 | '*'::rest -> (Tok.Mult, String.implode rest)
                 | '/'::rest -> (Tok.Div, String.implode rest)
+                | '~'::rest -> (Tok.Complement, String.implode rest)
                 | _ -> get_const_or_id input in
             tok :: (lex remaining_program)
 
@@ -119,6 +120,7 @@ let tok_to_string t =
     | Tok.Minus -> "-"
     | Tok.Mult -> "*"
     | Tok.Div -> "/"
+    | Tok.Complement -> "~"
     | Tok.IntKeyword -> "INT"
     | Tok.CharKeyword -> "CHAR"
     | Tok.ReturnKeyword -> "RETURN"

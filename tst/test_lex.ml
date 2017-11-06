@@ -51,7 +51,11 @@ let lex_punctuation_tests = [
     "test_lex_openparen" >:: test_lex_single "(" (Tok.OpenParen);
     "test_lex_closeparen" >:: test_lex_single ")" (Tok.CloseParen);
     "test_lex_semicolon" >:: test_lex_single ";" (Tok.Semicolon);
-    "test_lex_plus" >:: test_lex_single "+" (Tok.Plus)
+    "test_lex_plus" >:: test_lex_single "+" (Tok.Plus);
+    "test_lex_minus" >:: test_lex_single "-" (Tok.Minus);
+    "test_lex_product" >:: test_lex_single "*" (Tok.Mult);
+    "test_lex_divide" >:: test_lex_single "/" (Tok.Div);
+    "test_lex_complement" >:: test_lex_single "~" (Tok.Complement)
 ]
 
 let lex_id_tests = [
@@ -92,7 +96,11 @@ let lex_multi_tests = [
         Tok.Semicolon; Tok.Id("oo")];
     "test_lex_addition" >:: test_lex_multi "a+b" [Tok.Id("a"); Tok.Plus; Tok.Id("b")];
     "test_lex_addition_spaces" >:: test_lex_multi "1 + b" [Tok.Int(1); Tok.Plus; Tok.Id("b")];
-    "test_lex_addition_parens" >:: test_lex_multi "3 +('c'+ b)" [Tok.Int(3); Tok.Plus; Tok.OpenParen; Tok.Char('c'); Tok.Plus; Tok.Id("b"); Tok.CloseParen]
+    "test_lex_addition_parens" >:: test_lex_multi "3 +('c'+ b)" [Tok.Int(3); Tok.Plus; Tok.OpenParen; Tok.Char('c'); Tok.Plus; Tok.Id("b"); Tok.CloseParen];
+    "test_lex_subtraction" >:: test_lex_multi "4 - 'a'" [Tok.Int(4); Tok.Minus; Tok.Char('a')];
+    "test_lex_multiplication" >:: test_lex_multi "2*2" [Tok.Int(2); Tok.Mult; Tok.Int(2)];
+    "test_lex_division" >:: test_lex_multi "2/2" [Tok.Int(2); Tok.Div; Tok.Int(2)];
+    "test_lex_complement" >:: test_lex_multi "~5" [Tok.Complement; Tok.Int(5)];
 ]
 
 let lex_tests = lex_char_tests@lex_int_tests@lex_keyword_tests@lex_punctuation_tests@lex_id_tests@lex_whitespace_tests@lex_multi_tests
