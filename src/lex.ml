@@ -53,6 +53,7 @@ let get_char char_token =
 
 let get_int int_token =
     if (String.get int_token 0 = '0') &&
+        String.length int_token > 1 &&
         (Char.lowercase (String.get int_token 1) != 'x') 
     then (* octal *)
         int_of_string ("0o"^int_token)
@@ -106,6 +107,7 @@ let rec lex input =
                 | '*'::rest -> (Tok.Mult, String.implode rest)
                 | '/'::rest -> (Tok.Div, String.implode rest)
                 | '~'::rest -> (Tok.Complement, String.implode rest)
+                | '!'::rest -> (Tok.Bang, String.implode rest)
                 | _ -> get_const_or_id input in
             tok :: (lex remaining_program)
 
@@ -121,6 +123,7 @@ let tok_to_string t =
     | Tok.Mult -> "*"
     | Tok.Div -> "/"
     | Tok.Complement -> "~"
+    | Tok.Bang -> "!"
     | Tok.IntKeyword -> "INT"
     | Tok.CharKeyword -> "CHAR"
     | Tok.ReturnKeyword -> "RETURN"

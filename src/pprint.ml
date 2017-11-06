@@ -29,6 +29,8 @@ let op_to_string = function
 let unop_to_string = function
     | Ast.Negate -> "-"
     | Ast.Pos -> "+"
+    | Ast.Complement -> "~"
+    | Ast.Not -> "!"
 
 let rec exp_to_string = function
     | Ast.Const c -> const_to_string c

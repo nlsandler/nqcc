@@ -37,7 +37,11 @@ let generate filename prog =
             (match op with
             | Ast.Pos -> ()(* No-op for now - eventually handle casting to int if needed *)
             | Ast.Negate -> Printf.fprintf chan "    neg %%eax\n";
-            | Ast.Complement -> Printf.fprintf chan "    not %%eax\n";)
+            | Ast.Complement -> Printf.fprintf chan "    not %%eax\n";
+            | Ast.Not -> 
+                Printf.fprintf chan "    cmpl $0, %%eax\n";     (* compare eax to 0 *)
+                Printf.fprintf chan "    movl $0, %%eax\n";     (* set eax to 0 *)
+                Printf.fprintf chan "    sete %%al\n");         (* if eax was zero in earlier comparison, set al to 1 *)
         | Ast.Const(Ast.Int i) -> 
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
         | Ast.Const(Ast.Char c) ->

@@ -8,6 +8,7 @@ type token =
     | IntKeyword
     | CharKeyword
     | ReturnKeyword
+    | Bang
     | Complement
     | Plus
     | Minus

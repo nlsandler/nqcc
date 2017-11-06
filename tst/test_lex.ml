@@ -29,6 +29,7 @@ let lex_char_tests = [
 
 let lex_int_tests = [
     "test_lex_int" >:: test_lex_single "3" (Tok.Int(3));
+    "test_lex_zero" >:: test_lex_single "0" (Tok.Int(0));
     "test_lex_int_max" >:: test_lex_single "2147483647" (Tok.Int(2147483647));
     "test_lex_int_overflow" >:: test_expect_failure "2147483648" "Invalid int literal";
     "test_lex_int_underflow" >:: test_expect_failure "-2147483649" "Invalid int literal";
@@ -55,7 +56,8 @@ let lex_punctuation_tests = [
     "test_lex_minus" >:: test_lex_single "-" (Tok.Minus);
     "test_lex_product" >:: test_lex_single "*" (Tok.Mult);
     "test_lex_divide" >:: test_lex_single "/" (Tok.Div);
-    "test_lex_complement" >:: test_lex_single "~" (Tok.Complement)
+    "test_lex_complement" >:: test_lex_single "~" (Tok.Complement);
+    "test_lex_bang" >:: test_lex_single "!" (Tok.Bang)
 ]
 
 let lex_id_tests = [
@@ -101,6 +103,9 @@ let lex_multi_tests = [
     "test_lex_multiplication" >:: test_lex_multi "2*2" [Tok.Int(2); Tok.Mult; Tok.Int(2)];
     "test_lex_division" >:: test_lex_multi "2/2" [Tok.Int(2); Tok.Div; Tok.Int(2)];
     "test_lex_complement" >:: test_lex_multi "~5" [Tok.Complement; Tok.Int(5)];
+    "test_lex_compl_var" >:: test_lex_multi "~var" [Tok.Complement; Tok.Id("var")];
+    "test_lex_bang" >:: test_lex_multi "!foo" [Tok.Bang; Tok.Id("foo")];
+    "test_lex_zero" >:: test_lex_multi "!0" [Tok.Bang; Tok.Int(0)];
 ]
 
 let lex_tests = lex_char_tests@lex_int_tests@lex_keyword_tests@lex_punctuation_tests@lex_id_tests@lex_whitespace_tests@lex_multi_tests

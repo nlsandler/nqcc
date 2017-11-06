@@ -38,6 +38,9 @@ let rec parse_factor toks =
     | Tok.Complement::factor ->
         let num, rest = parse_factor factor in
         Ast.UnOp(Ast.Complement, num), rest
+    | Tok.Bang::factor ->
+        let num, rest = parse_factor factor in
+        Ast.UnOp(Ast.Not, num), rest
     | Tok.Int(i)::rest -> Ast.Const(Ast.Int(i)), rest
     | Tok.Char(c)::rest -> Ast.Const(Ast.Char(c)), rest
     | _ -> failwith("Failed to parse factor")

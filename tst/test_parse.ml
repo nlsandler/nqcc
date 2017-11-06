@@ -109,6 +109,11 @@ let complement_ast =
     let unop = Ast.UnOp(Ast.Complement, Ast.Const(Ast.Int(3))) in
     make_ast [] unop
 
+let not_tokens = Lex.lex "int main() {return !4;}"
+let not_ast =
+    let unop = Ast.UnOp(Ast.Not, Ast.Const(Ast.Int(4))) in
+    make_ast [] unop
+
 let addition_tokens = Lex.lex "int main(){return 1+2;}"
 let addition_ast = 
     let binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
@@ -195,6 +200,7 @@ let parse_tests = [
     "test_negation" >:: test_compare_asts negation_tokens negation_ast;
     "test_pos" >:: test_compare_asts pos_tokens pos_ast;
     "test_complement" >:: test_compare_asts complement_tokens complement_ast;
+    "test_not" >:: test_compare_asts not_tokens not_ast;
     "test_addition" >:: test_compare_asts addition_tokens addition_ast;
     "test_subtraction" >:: test_compare_asts subtraction_tokens subtraction_ast;
     "test_subtract_negative" >:: test_compare_asts subtract_negative_tokens subtract_negative_ast;
