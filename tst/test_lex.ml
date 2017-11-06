@@ -79,6 +79,7 @@ let lex_whitespace_tests = [
 
 let lex_multi_tests = [
     "test_lex_negative" >:: test_lex_multi "-1" [Tok.Minus; Tok.Int(1)];
+    "test_lex_positive" >:: test_lex_multi "+1" [Tok.Plus; Tok.Int(1)];
     "test_lex_brace_id" >:: test_lex_multi "}foo" [Tok.CloseBrace; Tok.Id("foo")];
     "test_lex_brace_id_whitespace" >:: test_lex_multi "} bar" [Tok.CloseBrace; Tok.Id("bar")];
     "test_lex_multi_semicolon" >:: test_lex_multi "bar;34" [Tok.Id("bar"); Tok.Semicolon; Tok.Int(34)];

@@ -1,4 +1,4 @@
-for i in examples/*.c
+for i in examples/*/*.c
 do
     gcc -m32 $i             #compile with gcc
     ./a.out                 #run it

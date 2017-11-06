@@ -32,6 +32,9 @@ let rec parse_factor toks =
     | Tok.Minus::factor ->
         let num, rest = parse_factor factor in
         Ast.UnOp(Ast.Negate, num), rest
+    | Tok.Plus::factor ->
+        let num, rest = parse_factor factor in
+        Ast.UnOp(Ast.Pos, num), rest
     | Tok.Int(i)::rest -> Ast.Const(Ast.Int(i)), rest
     | Tok.Char(c)::rest -> Ast.Const(Ast.Char(c)), rest
     | _ -> failwith("Failed to parse factor")
@@ -67,28 +70,7 @@ and build_exp left_term toks =
 and parse_exp toks =
     let left, rest = parse_term toks in
     build_exp left rest
-(*
-    match toks with
-    | tok::(Tok.Plus)::rest ->
-        let e1 = tok_to_const tok in
-        let e2, rest = parse_exp rest in
-        (Ast.BinOp(Ast.Add, e1, e2), rest)
-    | tok::(Tok.Mult)::rest ->
-        let e1 = tok_to_const tok in
-        let e2, rest = parse_exp rest in
-        (Ast.BinOp(Ast.Mult, e1, e2), rest)
-    | Tok.OpenParen::rest ->
-        let e1, rest = parse_exp rest  in
-        (match rest with
-        | Tok.CloseParen::Tok.Plus::rest_of_exp ->
-            let e2, rest = parse_exp rest_of_exp in
-            (Ast.BinOp(Ast.Add, e1, e2), rest)
-        | Tok.CloseParen::rest_after_exp -> (e1, rest_after_exp)
-        | _ -> failwith("Missing ')'") )
-    | (Tok.Int i) as t::rest -> (tok_to_const t, rest)
-    | (Tok.Char c) as t::rest -> (tok_to_const t, rest)
-    | _ -> failwith("Invalid expression")
-*)
+
 let rec parse_statement_list tokens =
     match tokens with
     | Tok.ReturnKeyword::Tok.Semicolon::rest -> [Ast.Return], rest

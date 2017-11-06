@@ -7,7 +7,7 @@ type type_def =
     | IntType
     | CharType
 type binop = Add | Sub | Mult | Div
-type unop = Negate
+type unop = Negate | Pos
 type exp = 
     | Const of const
     | UnOp of unop * exp
