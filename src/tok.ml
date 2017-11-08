@@ -14,6 +14,7 @@ type token =
     | Minus
     | Mult
     | Div
+    | Eq
     | Int of int
     | Char of char
     | Id of string

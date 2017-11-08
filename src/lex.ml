@@ -108,6 +108,8 @@ let rec lex input =
                 | '/'::rest -> (Tok.Div, String.implode rest)
                 | '~'::rest -> (Tok.Complement, String.implode rest)
                 | '!'::rest -> (Tok.Bang, String.implode rest)
+                | '='::'='::rest -> failwith ("comparison not yet implemented")
+                | '='::rest -> (Tok.Eq, String.implode rest)
                 | _ -> get_const_or_id input in
             tok :: (lex remaining_program)
 
@@ -124,6 +126,7 @@ let tok_to_string t =
     | Tok.Div -> "/"
     | Tok.Complement -> "~"
     | Tok.Bang -> "!"
+    | Tok.Eq -> "="
     | Tok.IntKeyword -> "INT"
     | Tok.CharKeyword -> "CHAR"
     | Tok.ReturnKeyword -> "RETURN"

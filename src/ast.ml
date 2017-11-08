@@ -8,14 +8,17 @@ type type_def =
     | CharType
 type binop = Add | Sub | Mult | Div
 type unop = Negate | Pos | Complement | Not
+type id = ID of string
 type exp = 
     | Const of const
+    | Var of id
     | UnOp of unop * exp
     | BinOp of binop * exp * exp
 type statement = 
+    | DeclareVar of type_def * id * exp option (* optional initial value *)
+    | Assign of id * exp
     | Return
     | ReturnVal of exp (* should we add a return_exp instead? *)
-type id = ID of string
 type fun_param = Param of type_def * id
 type fun_body = Body of statement list
 type fun_decl = FunDecl of type_def * id * fun_param list * fun_body

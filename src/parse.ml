@@ -41,6 +41,7 @@ let rec parse_factor toks =
     | Tok.Bang::factor ->
         let num, rest = parse_factor factor in
         Ast.UnOp(Ast.Not, num), rest
+    | Tok.Id(name)::rest -> Ast.Var(Ast.ID(name)), rest
     | Tok.Int(i)::rest -> Ast.Const(Ast.Int(i)), rest
     | Tok.Char(c)::rest -> Ast.Const(Ast.Char(c)), rest
     | _ -> failwith("Failed to parse factor")
@@ -77,15 +78,57 @@ and parse_exp toks =
     let left, rest = parse_term toks in
     build_exp left rest
 
-let rec parse_statement_list tokens =
+
+let parse_declaration var_type tokens =
     match tokens with
+    | Tok.Id(varname)::rest ->
+        let var_id = Ast.ID(varname) in
+        let init, rest =
+            match rest with
+            | Tok.Semicolon::rest_of_statements -> None, rest
+            | Tok.Eq::rest -> 
+                let exp, rest = parse_exp rest in
+                Some(exp), rest
+            | _ -> failwith("Invalid initial value for variable")
+        in Ast.DeclareVar(var_type, var_id, init), rest
+    | _ -> failwith("Invalid variable declaration")
+
+let parse_assignment = function
+    | Tok.Id(varname)::Tok.Eq::rest ->
+        let exp, rest = parse_exp rest in
+        Ast.Assign(Ast.ID(varname), exp), rest
+    | _ -> failwith("Invalid assignment statement")
+
+let parse_return_statement = function
     | Tok.ReturnKeyword::Tok.Semicolon::rest -> [Ast.Return], rest
     | Tok.ReturnKeyword::rest ->
         let exp, rest = parse_exp rest in
             if (List.hd rest == Tok.Semicolon)
             then [Ast.ReturnVal(exp)], List.tl rest
             else failwith("Expected semicolon at end of statement")
+    | _ -> failwith("Expected return statement")
+
+(* TODO: actually pay attention to types 
+ * also allow plain expressions that aren't assignments
+ *)
+let parse_statement tokens =
+    match tokens with
+    | Tok.IntKeyword::rest -> parse_declaration Ast.IntType rest
+    | Tok.CharKeyword::rest -> parse_declaration Ast.CharType rest
+    | Tok.Id(v)::Tok.Eq::rest -> parse_assignment tokens
     | _ -> failwith("Invalid statement")
+
+let rec parse_statement_list tokens =
+    match tokens with
+    | Tok.ReturnKeyword::rest -> parse_return_statement tokens
+    | _ ->
+        let next_statement, rest = parse_statement tokens in
+            if (List.hd rest == Tok.Semicolon)
+            then 
+                let statements, rest = parse_statement_list (List.tl rest) in
+                next_statement::statements, rest
+            else failwith("Expected semicolon at end of statement")
+        
 
 let parse_fun_body tokens = (* Assume for now there's nothing after function body *)
     let statements, rest = parse_statement_list tokens in
