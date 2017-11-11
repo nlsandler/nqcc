@@ -31,7 +31,8 @@ let generate filename prog =
                     Printf.fprintf chan "    idivl %d(%%esp)\n" stack_index;
             | Ast.Sub -> Printf.fprintf chan "    subl %d(%%esp), %%eax\n" stack_index;
             | Ast.Add -> Printf.fprintf chan "    addl %d(%%esp), %%eax\n" stack_index;
-            | Ast.Mult -> Printf.fprintf chan "    imul %d(%%esp), %%eax\n" stack_index;)
+            | Ast.Mult -> Printf.fprintf chan "    imul %d(%%esp), %%eax\n" stack_index;
+            | _ -> failwith("binop not yet implemented"))
         | Ast.UnOp(op, e) ->
             generate_exp e var_map stack_index;
             (match op with
@@ -52,32 +53,59 @@ let generate filename prog =
             Printf.fprintf chan "    movl    $%d, %%eax\n" (Char.code c);
         | _ -> failwith("Constant not supported") in
 
-    let generate_statement statement var_map stack_index =
-    match statement with
-    (* for return statements, variable map/stack index unchanged *)
-    | Ast.DeclareVar(t, Ast.ID(varname), rhs) ->
-        let _ = match rhs with
-            | Some exp -> generate_exp exp var_map stack_index
-            | None -> () in
-        (* push value of var onto stack *)
-        let _ = Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index in
-        let var_map = Map.add varname stack_index var_map in
-        let stack_index = stack_index - 4 in
-        var_map, stack_index
-    | Ast.Assign(Ast.ID(id), exp) ->
-        let _ = generate_exp exp var_map stack_index in
-        (* get location of variable on stack *)
-        let var_index = Map.find id var_map in
-        (* move value  of eax to that variable *)
-        Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" var_index;
-        (* var_map, stack_index stay the same *)
-        var_map, stack_index
-    | Ast.Return -> Printf.fprintf chan "    ret\n"; var_map, stack_index
-    | Ast.ReturnVal exp -> 
-        let _ = generate_exp exp var_map stack_index in
-        Printf.fprintf chan "    ret\n"; var_map, stack_index in
+    let rec generate_statement statement var_map stack_index =
+        match statement with
+        (* for return statements, variable map/stack index unchanged *)
+        | Ast.DeclareVar(t, Ast.ID(varname), rhs) ->
+            let _ = match rhs with
+                | Some exp -> generate_exp exp var_map stack_index
+                | None -> () in
+            (* push value of var onto stack *)
+            let _ = Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index in
+            let var_map = Map.add varname stack_index var_map in
+            let stack_index = stack_index - 4 in
+            var_map, stack_index
+        | Ast.Assign(Ast.ID(id), exp) ->
+            let _ = generate_exp exp var_map stack_index in
+            (* get location of variable on stack *)
+            let var_index = Map.find id var_map in
+            (* move value  of eax to that variable *)
+            Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" var_index;
+            (* var_map, stack_index stay the same *)
+            var_map, stack_index
+        | Ast.If(cond, body, else_body) ->
+            (* evaluate condition *)
+            let _ = generate_exp cond var_map stack_index in
+            let post_if_label = Util.unique_id "post_if" in
+            let _ = (* stuff that's the same whether or not there's an else block *)
+                (* compare cond to false *)
+                Printf.fprintf chan "    cmp     $0, %%eax\n";
+                (* if cond is false, jump over if body *)
+                Printf.fprintf chan "    je      %s\n" post_if_label;
+                (* generate if body *)
+                generate_statement_list body var_map stack_index in
+            (match else_body with
+            | Some else_statements -> 
+                let post_else_label = Util.unique_id "post_else" in
+                (* We're at end of if statement, need to jump over the else statement *)
+                Printf.fprintf chan "    jmp     %s\n" post_else_label;
+                (* now print out label after if statement *)
+                Printf.fprintf chan "%s:\n" post_if_label;
+                (* now generate else statement *)
+                generate_statement_list else_statements var_map stack_index;
+                (* now print post-else label *)
+                Printf.fprintf chan "%s:" post_else_label;
+                var_map, stack_index
+            | None ->
+                (* print out label that comes after if statement *)
+                Printf.fprintf chan "%s:\n" post_if_label; 
+                var_map, stack_index)
+        | Ast.Return -> Printf.fprintf chan "    ret\n"; var_map, stack_index
+        | Ast.ReturnVal exp -> 
+            let _ = generate_exp exp var_map stack_index in
+            Printf.fprintf chan "    ret\n"; var_map, stack_index
 
-    let rec generate_statement_list statements var_map stack_index =
+    and generate_statement_list statements var_map stack_index =
         match statements with
         | stmt::stmts ->
             let var_map, stack_index = generate_statement stmt var_map stack_index in

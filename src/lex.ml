@@ -84,6 +84,8 @@ let get_const_or_id input =
             | "return" -> Tok.ReturnKeyword
             | "int" -> Tok.IntKeyword
             | "char" -> Tok.CharKeyword
+            | "if" -> Tok.IfKeyword
+            | "else" -> Tok.ElseKeyword
             | _ -> Tok.Id(id_token_str) in
             (id_token, rest)
     else
@@ -103,12 +105,17 @@ let rec lex input =
                 | ';'::rest -> (Tok.Semicolon, String.implode rest)
                 | '+'::rest -> (Tok.Plus, String.implode rest)
                 | '-'::'-'::rest -> failwith("decrement not yet implemented")
+                | '!'::'='::rest -> (Tok.Neq, String.implode rest)
+                | '<'::'='::rest -> (Tok.Le, String.implode rest)
+                | '>'::'='::rest -> (Tok.Ge, String.implode rest)
+                | '<'::rest -> (Tok.Lt, String.implode rest)
+                | '>'::rest -> (Tok.Gt, String.implode rest)
                 | '-'::rest -> (Tok.Minus, String.implode rest)
                 | '*'::rest -> (Tok.Mult, String.implode rest)
                 | '/'::rest -> (Tok.Div, String.implode rest)
                 | '~'::rest -> (Tok.Complement, String.implode rest)
                 | '!'::rest -> (Tok.Bang, String.implode rest)
-                | '='::'='::rest -> failwith ("comparison not yet implemented")
+                | '='::'='::rest -> (Tok.DoubleEq, String.implode rest)
                 | '='::rest -> (Tok.Eq, String.implode rest)
                 | _ -> get_const_or_id input in
             tok :: (lex remaining_program)
@@ -127,9 +134,17 @@ let tok_to_string t =
     | Tok.Complement -> "~"
     | Tok.Bang -> "!"
     | Tok.Eq -> "="
+    | Tok.DoubleEq -> "=="
+    | Tok.Neq -> "!="
+    | Tok.Le -> "<="
+    | Tok.Ge -> ">="
+    | Tok.Lt -> "<"
+    | Tok.Gt -> ">"
     | Tok.IntKeyword -> "INT"
     | Tok.CharKeyword -> "CHAR"
     | Tok.ReturnKeyword -> "RETURN"
+    | Tok.IfKeyword -> "IF"
+    | Tok.ElseKeyword -> "ELSE"
     | Tok.Int i -> Printf.sprintf "INT<%d>" i
     | Tok.Id id -> Printf.sprintf "ID<%s>" id
     | Tok.Char c -> Printf.sprintf "CHAR<%c>" c

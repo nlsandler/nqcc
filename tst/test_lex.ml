@@ -44,6 +44,8 @@ let lex_keyword_tests = [
     "test_lex_return_keyword" >:: test_lex_single "return" (Tok.ReturnKeyword);
     "test_lex_char_keyword" >:: test_lex_single "char" (Tok.CharKeyword);
     "test_lex_int_keyword" >:: test_lex_single "int" (Tok.IntKeyword);
+    "test_lex_if_keyword" >:: test_lex_single "if" (Tok.IfKeyword);
+    "test_lex_else_keyword" >:: test_lex_single "else" (Tok.ElseKeyword)
 ]
 
 let lex_punctuation_tests = [
@@ -58,7 +60,13 @@ let lex_punctuation_tests = [
     "test_lex_divide" >:: test_lex_single "/" (Tok.Div);
     "test_lex_complement" >:: test_lex_single "~" (Tok.Complement);
     "test_lex_bang" >:: test_lex_single "!" (Tok.Bang);
-    "test_lex_eq" >:: test_lex_single "=" (Tok.Eq)
+    "test_lex_eq" >:: test_lex_single "=" (Tok.Eq);
+    "test_lex_double_eq" >:: test_lex_single "==" (Tok.DoubleEq);
+    "test_lex_neq" >:: test_lex_single "!=" (Tok.Neq);
+    "test_lex_gt" >:: test_lex_single ">" (Tok.Gt);
+    "test_lex_ge" >:: test_lex_single ">=" (Tok.Ge);
+    "test_lex_lt" >:: test_lex_single "<" (Tok.Lt);
+    "test_lex_le" >:: test_lex_single "<=" (Tok.Le);
 ]
 
 let lex_id_tests = [
@@ -108,6 +116,8 @@ let lex_multi_tests = [
     "test_lex_bang" >:: test_lex_multi "!foo" [Tok.Bang; Tok.Id("foo")];
     "test_lex_assignment" >:: test_lex_multi "a=5" [Tok.Id("a"); Tok.Eq; Tok.Int(5);];
     "test_lex_declaration" >:: test_lex_multi "int somevar;" [Tok.IntKeyword; Tok.Id("somevar"); Tok.Semicolon];
+    "test_lex_equals" >:: test_lex_multi "a == 4" [Tok.Id("a"); Tok.DoubleEq; Tok.Int(4)];
+    "test_lex_not_equal" >:: test_lex_multi "a != 4" [Tok.Id("a"); Tok.Neq; Tok.Int(4)];
 ]
 
 let lex_tests = lex_char_tests@lex_int_tests@lex_keyword_tests@lex_punctuation_tests@lex_id_tests@lex_whitespace_tests@lex_multi_tests

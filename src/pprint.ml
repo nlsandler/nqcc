@@ -38,7 +38,7 @@ let rec exp_to_string = function
     | Ast.BinOp(op, e1, e2) -> Printf.sprintf "(%s %s %s)" (exp_to_string e1) (op_to_string op) (exp_to_string e2)
     | Ast.UnOp(op, e) -> Printf.sprintf "(%s %s)" (unop_to_string op) (exp_to_string e)
 
-let pprint_stmt = function
+let rec pprint_stmt = function
     | Ast.DeclareVar(var_type, Ast.ID(var_name), rhs) ->
         (match rhs with
         | None -> Printf.printf "\t\t%s %s\n" (type_to_string var_type) var_name
@@ -47,6 +47,17 @@ let pprint_stmt = function
         Printf.printf "\t\t%s = %s\n" var_name (exp_to_string rhs)
     | Ast.Return -> print_string "\t\tRETURN\n"
     | Ast.ReturnVal(e) -> Printf.printf "\t\tRETURN %s\n" (exp_to_string e)
+    | Ast.If(cond, then_body, else_body) ->
+        Printf.printf "\t\tIF (%s) {\n" (exp_to_string cond);
+        List.iter pprint_stmt then_body;
+        (match else_body with
+        | Some statements ->
+            Printf.printf "\t\t} ELSE {\n";
+            List.iter pprint_stmt statements;
+            Printf.printf "\t\t}\n"
+        | None -> Printf.printf "\t\t}\n")
+
+
 
 let pprint_function_body (Ast.Body(stmts)) =
     print_string "\tbody:\n";

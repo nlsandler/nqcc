@@ -8,13 +8,21 @@ type token =
     | IntKeyword
     | CharKeyword
     | ReturnKeyword
+    | IfKeyword
+    | ElseKeyword
     | Bang
     | Complement
     | Plus
     | Minus
     | Mult
     | Div
-    | Eq
+    | Eq (* = *)
+    | DoubleEq (* == *)
+    | Neq (* != *)
+    | Lt (* < *)
+    | Le (* <= *)
+    | Gt (* > *)
+    | Ge (* >= *)
     | Int of int
     | Char of char
     | Id of string
