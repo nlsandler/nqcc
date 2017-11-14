@@ -6,12 +6,6 @@ let compare_ids (Ast.ID expected_id) (Ast.ID actual_id) = String.equal expected_
 let compare_params (Ast.Param(t1, id1)) (Ast.Param(t2, id2)) = 
     (t1 == t2) && (compare_ids id1 id2)
 
-let rec compare_param_lists expected actual = 
-    match expected, actual with
-    | [], [] -> true
-    | p1::ps1, p2::ps2 -> (compare_params p1 p2)&&(compare_param_lists ps1 ps1)
-    | _ -> false
-
 let compare_consts expected actual =
     match expected, actual with
     | Ast.Int(i1), Ast.Int(i2) -> i1 == i2
@@ -26,6 +20,8 @@ let rec compare_exps expected actual =
         (expected_op == actual_op) && compare_exps expected_e1 actual_e1 && compare_exps expected_e2 actual_e2
     | Ast.UnOp(expected_op, expected_exp), Ast.UnOp(actual_op, actual_exp) ->
         (expected_op == actual_op) && compare_exps expected_exp actual_exp
+    | Ast.FunCall(expected_id, expected_args), Ast.FunCall(actual_id, actual_args) ->
+        compare_ids expected_id actual_id && List.for_all2 compare_exps expected_args actual_args
     | _ -> false
 
 let rec compare_statements expected actual = 
@@ -41,27 +37,21 @@ let rec compare_statements expected actual =
     | Ast.Return, Ast.Return -> true
     | Ast.ReturnVal(v1), Ast.ReturnVal(v2) -> compare_exps v1 v2
     | Ast.If(cond1, then1, else1), Ast.If(cond2, then2, else2) ->
-        compare_exps cond1 cond2 && compare_statement_lists then1 then2 &&
+        compare_exps cond1 cond2 && List.for_all2 compare_statements then1 then2 &&
         (match else1, else2 with
-        | Some body1, Some body2 -> compare_statement_lists body1 body2
+        | Some body1, Some body2 -> List.for_all2 compare_statements body1 body2
         | None, None -> true
         | _ -> false)
-    | _ -> false
-
-and compare_statement_lists expected actual =
-    match expected, actual with
-    | [], [] -> true
-    | stmt1::stmts1, stmt2::stmts2 -> (compare_statements stmt1 stmt2) && compare_statement_lists stmts1 stmts2
     | _ -> false
 
 let compare_funs expected actual = 
     match expected, actual with
     | Ast.FunDecl(t1, name1, params1, Ast.Body(body1)), Ast.FunDecl(t2, name2, params2, Ast.Body(body2)) ->
-    t1 == t2 && compare_ids name1 name2 && compare_param_lists params1 params2 && compare_statement_lists body1 body2
+    t1 == t2 && compare_ids name1 name2 && List.for_all2 compare_params params1 params2 && List.for_all2 compare_statements body1 body2
 
 let compare_asts expected actual = 
     match expected, actual with
-    | Ast.Prog(fun1), Ast.Prog(fun2) -> compare_funs fun1 fun2
+    | Ast.Prog(fun_list1), Ast.Prog(fun_list2) -> List.for_all2 compare_funs fun_list1 fun_list2
 
 
 (* Test utilities *)
@@ -91,7 +81,7 @@ let make_ast params statements =
     let body = Ast.Body(statements) in
     let fun_name = Ast.ID("main") in
     let f = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
-    Ast.Prog(f)
+    Ast.Prog([f])
 
 let make_simple_ast params exp =
     let ret = Ast.ReturnVal(exp) in
@@ -322,6 +312,29 @@ let conditional_parse_tests = [
     "test_single_if_else" >:: test_compare_asts single_if_else_tokens single_if_else_ast;
 ]
 
+(* FUNCTION CALLS *)
+let fun_tokens = Lex.lex "int main() { return foo(); }" (* note: call to undefined function should fail during code generation, not parsing *)
+let fun_ast =
+    let fun_call = Ast.FunCall(Ast.ID("foo"), []) in
+    make_simple_ast [] fun_call
+
+let fun_args_tokens = Lex.lex "int main() { return foo(5); }"
+let fun_args_ast =
+    let fun_call = Ast.FunCall(Ast.ID("foo"), [Ast.Const(Ast.Int(5))]) in
+    make_simple_ast [] fun_call
+
+let fun_arg_exp_tokens = Lex.lex "int main() { return foo(a + 5); }"
+let fun_arg_exp_ast =
+    let arg_exp = Ast.BinOp(Ast.Add, Ast.Var(Ast.ID("a")), Ast.Const(Ast.Int(5))) in
+    let fun_call = Ast.FunCall(Ast.ID("foo"), [arg_exp]) in
+    make_simple_ast [] fun_call
+
+let fun_call_parse_tests = [
+    "test_simple_call" >:: test_compare_asts fun_tokens fun_ast;
+    "test_call_with_args" >:: test_compare_asts fun_args_tokens fun_args_ast;
+    "test_call_with_complex_arg" >:: test_compare_asts fun_arg_exp_tokens fun_arg_exp_ast;
+]
+
 (* FAILURE *)
 
 let bad_token_list = [Tok.IntKeyword]
@@ -344,4 +357,4 @@ let failure_parse_tests = [
 ]
 
 (* TODO: add comp parse test *)
-let parse_tests = basic_parse_tests@unop_parse_tests@binop_parse_tests@variable_parse_tests@conditional_parse_tests@failure_parse_tests
+let parse_tests = basic_parse_tests@unop_parse_tests@binop_parse_tests@variable_parse_tests@conditional_parse_tests@fun_call_parse_tests@failure_parse_tests

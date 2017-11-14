@@ -25,6 +25,7 @@ let op_to_string = function
     | Ast.Sub -> "-"
     | Ast.Mult -> "*"
     | Ast.Div -> "/"
+    | _ -> failwith("comparison ops not implemented")
 
 let unop_to_string = function
     | Ast.Negate -> "-"
@@ -37,6 +38,11 @@ let rec exp_to_string = function
     | Ast.Const c -> const_to_string c
     | Ast.BinOp(op, e1, e2) -> Printf.sprintf "(%s %s %s)" (exp_to_string e1) (op_to_string op) (exp_to_string e2)
     | Ast.UnOp(op, e) -> Printf.sprintf "(%s %s)" (unop_to_string op) (exp_to_string e)
+    | Ast.FunCall(fun_id, args) -> Printf.sprintf "%s(%s)" (id_to_string fun_id) (args_to_string args)
+
+and args_to_string args =
+    let arg_strings = List.map exp_to_string args in
+    String.concat ", " arg_strings
 
 let rec pprint_stmt = function
     | Ast.DeclareVar(var_type, Ast.ID(var_name), rhs) ->
@@ -57,16 +63,14 @@ let rec pprint_stmt = function
             Printf.printf "\t\t}\n"
         | None -> Printf.printf "\t\t}\n")
 
-
-
 let pprint_function_body (Ast.Body(stmts)) =
     print_string "\tbody:\n";
     List.map pprint_stmt stmts
 
-let pprint (Ast.Prog p) = 
-    match p with
-    | Ast.FunDecl(fun_type, fun_id, fun_params, fun_body) ->
-        let _ = pprint_function_decl fun_type fun_id;
-            pprint_function_params fun_params;
-            pprint_function_body fun_body; in
-        ()
+let pprint_function (Ast.FunDecl(fun_type, fun_id, fun_params, fun_body)) =
+    let _ = pprint_function_decl fun_type fun_id in
+    let _ = pprint_function_params fun_params in
+    let _ = pprint_function_body fun_body in
+    ()
+
+let pprint (Ast.Prog funs) = List.iter pprint_function funs

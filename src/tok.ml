@@ -4,6 +4,7 @@ type token =
     | CloseBrace
     | OpenParen
     | CloseParen
+    | Comma
     | Semicolon
     | IntKeyword
     | CharKeyword

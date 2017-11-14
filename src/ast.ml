@@ -24,6 +24,7 @@ type exp =
     | Var of id
     | UnOp of unop * exp
     | BinOp of binop * exp * exp
+    | FunCall of id * exp list
 type statement = 
     | DeclareVar of type_def * id * exp option (* optional initial value *)
     | Assign of id * exp
@@ -33,4 +34,4 @@ type statement =
 type fun_param = Param of type_def * id
 type fun_body = Body of statement list
 type fun_decl = FunDecl of type_def * id * fun_param list * fun_body
-type prog = Prog of fun_decl
+type prog = Prog of fun_decl list

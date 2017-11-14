@@ -118,7 +118,11 @@ let generate filename prog =
             let _ = Printf.fprintf chan "_%s:\n" fun_name in
             generate_statement_list statements Map.empty (-4) in
 
+    let rec generate_funs = function
+        | [] -> ()
+        | f::fs -> generate_fun f; generate_funs fs  in
+
     match prog with
-    | Ast.Prog f ->  
-        let _ = generate_fun f in
+    | Ast.Prog fun_list ->  
+        let _ = generate_funs fun_list in
         close_out chan

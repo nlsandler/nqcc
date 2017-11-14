@@ -20,9 +20,27 @@ let rec parse_fun_params = function
 let tok_to_const = function
     | Tok.Int i -> Ast.Const(Ast.Int i)
     | Tok.Char c -> Ast.Const(Ast.Char c)
-    | _ -> failwith("Not a constant") 
+    | _ -> failwith("Not a constant")
 
-let rec parse_factor toks =
+let rec parse_function_call = function
+    | Tok.Id(name)::Tok.OpenParen::arg_tokens ->
+        let fun_name = Ast.ID(name) in
+        let args, rest = parse_function_arguments arg_tokens in
+        Ast.FunCall(fun_name, args), rest
+    | _ -> failwith("Shouldn't have called parse_function_call, this isn't a function call")
+
+and parse_function_arguments = function
+    | Tok.CloseParen::rest -> [], rest
+    | toks ->
+        let arg, rest = parse_exp toks in
+        let args, rest = 
+            match rest with
+            | Tok.Comma::more_args -> parse_function_arguments more_args
+            | Tok.CloseParen::after_fun_call -> [], after_fun_call
+            | _ -> failwith("Invalid list of function arguments")  in
+        arg::args, rest
+
+and parse_factor toks =
     match toks with
     | Tok.OpenParen::factor -> 
         let exp, after_exp = parse_exp factor in
@@ -41,6 +59,7 @@ let rec parse_factor toks =
     | Tok.Bang::factor ->
         let num, rest = parse_factor factor in
         Ast.UnOp(Ast.Not, num), rest
+    | Tok.Id(name)::Tok.OpenParen::rest -> parse_function_call toks
     | Tok.Id(name)::rest -> Ast.Var(Ast.ID(name)), rest
     | Tok.Int(i)::rest -> Ast.Const(Ast.Int(i)), rest
     | Tok.Char(c)::rest -> Ast.Const(Ast.Char(c)), rest
@@ -177,7 +196,7 @@ and parse_statement_list tokens =
 let parse_fun_body tokens = (* Assume for now there's nothing after function body *)
     let statements, rest = parse_statement_list tokens in
     match rest with
-    | Tok.CloseBrace::[] -> Ast.Body(statements)
+    | Tok.CloseBrace::rest -> Ast.Body(statements), rest
     | _ -> failwith("Expected closing brace")
 
 let parse_fun tokens =
@@ -187,10 +206,17 @@ let parse_fun tokens =
         | Tok.CharKeyword::(Tok.Id name)::Tok.OpenParen::rest -> (Ast.CharType, Ast.ID(name), rest)
         | _ -> failwith("Parse error in parse_fun: bad function type or name") in
     let fun_params, rest = parse_fun_params rest in
-    let fun_body = 
+    let fun_body, rest = 
         match rest with
         | Tok.OpenBrace::rest -> parse_fun_body rest
         | _ -> failwith("Expected brace to open function body") in
-    Ast.FunDecl(fun_type, fun_name, fun_params, fun_body)
+    Ast.FunDecl(fun_type, fun_name, fun_params, fun_body), rest
 
-let parse tokens = Ast.Prog(parse_fun tokens)
+let rec parse_funs = function
+    | [] -> [] (* no functions left to parse *)
+    | tokens ->
+        let f, rest = parse_fun tokens in
+        let fs = parse_funs rest in
+        f::fs
+
+let parse tokens = Ast.Prog(parse_funs tokens)

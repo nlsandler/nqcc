@@ -103,6 +103,7 @@ let rec lex input =
                 | '('::rest -> (Tok.OpenParen, String.implode rest)
                 | ')'::rest -> (Tok.CloseParen, String.implode rest)
                 | ';'::rest -> (Tok.Semicolon, String.implode rest)
+                | ','::rest -> (Tok.Comma, String.implode rest)
                 | '+'::rest -> (Tok.Plus, String.implode rest)
                 | '-'::'-'::rest -> failwith("decrement not yet implemented")
                 | '!'::'='::rest -> (Tok.Neq, String.implode rest)
@@ -127,6 +128,7 @@ let tok_to_string t =
     | Tok.OpenParen -> "("
     | Tok.CloseParen -> ")"
     | Tok.Semicolon -> ";"
+    | Tok.Comma -> ","
     | Tok.Plus -> "+"
     | Tok.Minus -> "-"
     | Tok.Mult -> "*"
