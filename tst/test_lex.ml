@@ -54,6 +54,7 @@ let lex_punctuation_tests = [
     "test_lex_openparen" >:: test_lex_single "(" (Tok.OpenParen);
     "test_lex_closeparen" >:: test_lex_single ")" (Tok.CloseParen);
     "test_lex_semicolon" >:: test_lex_single ";" (Tok.Semicolon);
+    "test_lex_comma" >:: test_lex_single "," (Tok.Comma);
     "test_lex_plus" >:: test_lex_single "+" (Tok.Plus);
     "test_lex_minus" >:: test_lex_single "-" (Tok.Minus);
     "test_lex_product" >:: test_lex_single "*" (Tok.Mult);
