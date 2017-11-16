@@ -160,13 +160,15 @@ and parse_statement_block = function
  *)
 and parse_statement tokens =
     let stmt, rest =
-        match tokens with
+        (match tokens with
         | Tok.IntKeyword::rest -> parse_declaration Ast.IntType rest
         | Tok.CharKeyword::rest -> parse_declaration Ast.CharType rest
         | Tok.IfKeyword::rest -> parse_if_statement tokens
         | Tok.Id(v)::Tok.Eq::rest -> parse_assignment tokens
         | Tok.ReturnKeyword::rest -> parse_return_statement tokens
-        | _ -> failwith("Invalid statement") in
+        | _ -> 
+            let exp, rest = parse_exp tokens in
+            Ast.Exp(exp), rest) in
     match stmt, rest with
     | Ast.If(_), _ -> stmt, rest (* no semicolon after if *)
     | _, Tok.Semicolon::rest -> stmt, rest (* eat semicolon from end of statement *)

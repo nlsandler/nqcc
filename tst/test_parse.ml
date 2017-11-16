@@ -329,6 +329,8 @@ let fun_arg_exp_ast =
     let fun_call = Ast.FunCall(Ast.ID("foo"), [arg_exp]) in
     make_simple_ast [] fun_call
 
+let fun_call_standalone = "int main() {incr (b);}"
+
 let fun_call_parse_tests = [
     "test_simple_call" >:: test_compare_asts fun_tokens fun_ast;
     "test_call_with_args" >:: test_compare_asts fun_args_tokens fun_args_ast;

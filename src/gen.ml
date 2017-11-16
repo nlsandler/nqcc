@@ -47,11 +47,26 @@ let generate filename prog =
             let var_index = Map.find id var_map in
             (* move value  of variable to eax *)
             Printf.fprintf chan "    movl %d(%%esp), %%eax\n" var_index;
+        | Ast.FunCall(Ast.ID id, args) ->
+            let _ = put_args_on_stack args var_map stack_index in
+            Printf.fprintf chan "    addl    $%d, %%esp\n" (stack_index + 4);
+            Printf.fprintf chan "    call _%s\n" id;
+            Printf.fprintf chan "    subl    $%d, %%esp\n" (stack_index + 4);
         | Ast.Const(Ast.Int i) -> 
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
         | Ast.Const(Ast.Char c) ->
             Printf.fprintf chan "    movl    $%d, %%eax\n" (Char.code c);
-        | _ -> failwith("Constant not supported") in
+        | _ -> failwith("Constant not supported") 
+
+    and put_args_on_stack args var_map stack_index =
+        match args with 
+        | [] -> ()
+        | item::items ->
+            (* decrement 4 to save a spot on the stack for return value *)
+            let stack_index = stack_index - 4 in 
+            generate_exp item var_map stack_index;
+            Printf.fprintf chan "    movl    %%eax, %d(%%esp)\n" stack_index;
+            put_args_on_stack items var_map (stack_index - 4); in
 
     let rec generate_statement statement var_map stack_index =
         match statement with
@@ -100,6 +115,7 @@ let generate filename prog =
                 (* print out label that comes after if statement *)
                 Printf.fprintf chan "%s:\n" post_if_label; 
                 var_map, stack_index)
+        | Ast.Exp(e) -> generate_exp e var_map stack_index; var_map, stack_index
         | Ast.Return -> Printf.fprintf chan "    ret\n"; var_map, stack_index
         | Ast.ReturnVal exp -> 
             let _ = generate_exp exp var_map stack_index in
@@ -116,7 +132,8 @@ let generate filename prog =
         match f with
         | Ast.FunDecl(fun_type, Ast.ID(fun_name), fun_params, Ast.Body(statements)) ->
             let _ = Printf.fprintf chan "_%s:\n" fun_name in
-            generate_statement_list statements Map.empty (-4) in
+            let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si - 4)) (Map.empty, -4) fun_params in
+            generate_statement_list statements var_map stack_index in
 
     let rec generate_funs = function
         | [] -> ()
