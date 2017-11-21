@@ -28,9 +28,10 @@ let id_regexp = Str.regexp "\\([A-Za-z_][A-Za-z0-9_]*\\)\\(\\b.*\\)"
 let char_regexp = Str.regexp "'\\([^'\\\\]\\|\\\\\\([abfenrtv'\"?\\\\]\\|[0-7]+\\|x[0-9a-fA-F]+\\)\\)'\\(.*\\)"
 
 let get_char char_token = 
-    if String.length char_token = 1 then String.get char_token 0 else
-    if String.length char_token = 2 then (* escape sequence *)
-        match char_token with
+    match String.length char_token with
+    | 1 -> String.get char_token 0 (* a single character *)
+    | 2 -> (* escape sequence *)
+        begin match char_token with
         | "\\\\" -> Char.chr 92   (* backslash *)
         | "\\a" -> Char.chr 7   (* bell *)
         | "\\b" -> '\b'         (* backspace *)
@@ -43,110 +44,117 @@ let get_char char_token =
         | "\\\'" -> Char.chr 39 (* single quote *)
         | "\\\"" -> '"'         (* double quote *)
         | "\\?" -> '?'          (* question mark *)
-        | _ -> failwith("Unknown escape sequence "^char_token) else
-    if String.get char_token 1 = 'x' then (* hex string *)
-        let num_str = "0"^(String.slice ~first:1 char_token) in
-        Char.chr (Int.of_string num_str) 
-    else 
-        let num_str = "0o"^(String.slice ~first:1 char_token) in
+        | _ -> failwith("Unknown escape sequence "^char_token)
+        end
+    | _ -> (* different prefix for hex or octal *)
+        let prefix = if String.get char_token 1 = 'x' then "0" else "0o" in 
+        let num_str = prefix^(String.slice ~first:1 char_token) in
         Char.chr (Int.of_string num_str)
 
 let get_int int_token =
     if (String.get int_token 0 = '0') &&
         String.length int_token > 1 &&
-        (Char.lowercase (String.get int_token 1) != 'x') 
-    then (* octal *)
-        int_of_string ("0o"^int_token)
-    else (* decimal or hex *)
-        int_of_string int_token
+        (Char.lowercase (String.get int_token 1) <> 'x') 
+    then int_of_string ("0o"^int_token) (* octal *)
+    else int_of_string int_token (* hex or decimal *)
 
-let get_const_or_id input =
+let get_id t =
+    let open Tok in
+    match t with
+    | "return" -> ReturnKeyword
+    | "int" -> IntKeyword
+    | "char" -> CharKeyword
+    | "if" -> IfKeyword
+    | "else" -> ElseKeyword
+    | _ -> Id(t)
+
+let lex_complex_token input =
     if Str.string_match int_regexp input 0
-    then (* it's an int *)
+    then (* it's an int *) 
         let int_token = Str.matched_group 1 input in
         let int_val = get_int int_token in
-            if int_val > Int32.to_int Int32.max_int || int_val < Int32.to_int Int32.min_int
-            then failwith("Invalid int literal")
-            else
-                let rest = Str.matched_group 4 input in
-                    (Tok.Int(int_val), rest)
+        if int_val > Int32.to_int Int32.max_int || int_val < Int32.to_int Int32.min_int
+        then failwith("Invalid int literal") 
+        else
+            let rest = Str.matched_group 4 input in
+            Tok.Int(int_val), rest
     else if Str.string_match char_regexp input 0
     then (* it's a char *)
         let char_token = Str.matched_group 1 input in
         let rest = Str.matched_group 3 input in
-        (Tok.Char(get_char char_token), rest)
+        Tok.Char(get_char char_token), rest
     else if Str.string_match id_regexp input 0
     then (* it's an ID, possibly a keyword *)
         let id_token_str = Str.matched_group 1 input in
         let rest = Str.matched_group 2 input in
-        let id_token = 
-            match id_token_str with
-            | "return" -> Tok.ReturnKeyword
-            | "int" -> Tok.IntKeyword
-            | "char" -> Tok.CharKeyword
-            | "if" -> Tok.IfKeyword
-            | "else" -> Tok.ElseKeyword
-            | _ -> Tok.Id(id_token_str) in
-            (id_token, rest)
+        let id_token = get_id id_token_str in
+        id_token, rest
     else
         failwith ("Syntax error: \""^input^ "\" is not valid.")
 
-let rec lex input = 
-    let input = String.trim input in 
-        if String.length input = 0
-        then []
-        else
-            let tok, remaining_program = 
-                match String.explode input with
-                | '{'::rest -> (Tok.OpenBrace, String.implode rest)
-                | '}'::rest -> (Tok.CloseBrace, String.implode rest)
-                | '('::rest -> (Tok.OpenParen, String.implode rest)
-                | ')'::rest -> (Tok.CloseParen, String.implode rest)
-                | ';'::rest -> (Tok.Semicolon, String.implode rest)
-                | ','::rest -> (Tok.Comma, String.implode rest)
-                | '+'::rest -> (Tok.Plus, String.implode rest)
-                | '-'::'-'::rest -> failwith("decrement not yet implemented")
-                | '!'::'='::rest -> (Tok.Neq, String.implode rest)
-                | '<'::'='::rest -> (Tok.Le, String.implode rest)
-                | '>'::'='::rest -> (Tok.Ge, String.implode rest)
-                | '<'::rest -> (Tok.Lt, String.implode rest)
-                | '>'::rest -> (Tok.Gt, String.implode rest)
-                | '-'::rest -> (Tok.Minus, String.implode rest)
-                | '*'::rest -> (Tok.Mult, String.implode rest)
-                | '/'::rest -> (Tok.Div, String.implode rest)
-                | '~'::rest -> (Tok.Complement, String.implode rest)
-                | '!'::rest -> (Tok.Bang, String.implode rest)
-                | '='::'='::rest -> (Tok.DoubleEq, String.implode rest)
-                | '='::rest -> (Tok.Eq, String.implode rest)
-                | _ -> get_const_or_id input in
-            tok :: (lex remaining_program)
+let rec lex_const_or_id input_toks =
+    let input = String.trim (String.implode input_toks) in
+    let tok, rest = lex_complex_token input in
+    tok::(lex_rest (String.explode rest))
+
+and lex_rest words = 
+    let open Tok in
+    match words with
+    | [] -> []
+    | '{'::rest -> OpenBrace::(lex_rest rest)
+    | '}'::rest -> CloseBrace::(lex_rest rest)
+    | '('::rest -> OpenParen::(lex_rest rest)
+    | ')'::rest -> CloseParen::(lex_rest rest)
+    | ';'::rest -> Semicolon::(lex_rest rest)
+    | ','::rest -> Comma::(lex_rest rest)
+    | '+'::rest -> Plus::(lex_rest rest)
+    | '-'::'-'::rest -> failwith("decrement not yet implemented")
+    | '!'::'='::rest -> Neq::(lex_rest rest)
+    | '<'::'='::rest -> Le::(lex_rest rest)
+    | '>'::'='::rest -> Ge::(lex_rest rest)
+    | '<'::rest -> Lt::(lex_rest rest)
+    | '>'::rest -> Gt::(lex_rest rest)
+    | '-'::rest -> Minus::(lex_rest rest)
+    | '*'::rest -> Mult::(lex_rest rest)
+    | '/'::rest -> Div::(lex_rest rest)
+    | '~'::rest -> Complement::(lex_rest rest)
+    | '!'::rest -> Bang::(lex_rest rest)
+    | '='::'='::rest -> DoubleEq::(lex_rest rest)
+    | '='::rest -> Eq::(lex_rest rest)
+    | c::rest -> 
+        if Char.is_whitespace c then lex_rest rest else lex_const_or_id words
+
+let lex input =
+    let input = String.trim input in
+    lex_rest (String.explode input)
 
 let tok_to_string t =
+    let open Tok in
     match t with
-    | Tok.OpenBrace -> "{"
-    | Tok.CloseBrace -> "}"
-    | Tok.OpenParen -> "("
-    | Tok.CloseParen -> ")"
-    | Tok.Semicolon -> ";"
-    | Tok.Comma -> ","
-    | Tok.Plus -> "+"
-    | Tok.Minus -> "-"
-    | Tok.Mult -> "*"
-    | Tok.Div -> "/"
-    | Tok.Complement -> "~"
-    | Tok.Bang -> "!"
-    | Tok.Eq -> "="
-    | Tok.DoubleEq -> "=="
-    | Tok.Neq -> "!="
-    | Tok.Le -> "<="
-    | Tok.Ge -> ">="
-    | Tok.Lt -> "<"
-    | Tok.Gt -> ">"
-    | Tok.IntKeyword -> "INT"
-    | Tok.CharKeyword -> "CHAR"
-    | Tok.ReturnKeyword -> "RETURN"
-    | Tok.IfKeyword -> "IF"
-    | Tok.ElseKeyword -> "ELSE"
-    | Tok.Int i -> Printf.sprintf "INT<%d>" i
-    | Tok.Id id -> Printf.sprintf "ID<%s>" id
-    | Tok.Char c -> Printf.sprintf "CHAR<%c>" c
+    | OpenBrace -> "{"
+    | CloseBrace -> "}"
+    | OpenParen -> "("
+    | CloseParen -> ")"
+    | Semicolon -> ";"
+    | Comma -> ","
+    | Plus -> "+"
+    | Minus -> "-"
+    | Mult -> "*"
+    | Div -> "/"
+    | Complement -> "~"
+    | Bang -> "!"
+    | Eq -> "="
+    | DoubleEq -> "=="
+    | Neq -> "!="
+    | Le -> "<="
+    | Ge -> ">="
+    | Lt -> "<"
+    | Gt -> ">"
+    | IntKeyword -> "INT"
+    | CharKeyword -> "CHAR"
+    | ReturnKeyword -> "RETURN"
+    | IfKeyword -> "IF"
+    | ElseKeyword -> "ELSE"
+    | Int i -> Printf.sprintf "INT<%d>" i
+    | Id id -> Printf.sprintf "ID<%s>" id
+    | Char c -> Printf.sprintf "CHAR<%c" c

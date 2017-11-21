@@ -56,12 +56,14 @@ let rec pprint_stmt = function
     | Ast.If(cond, then_body, else_body) ->
         Printf.printf "\t\tIF (%s) {\n" (exp_to_string cond);
         List.iter pprint_stmt then_body;
-        (match else_body with
+        begin match else_body with
         | Some statements ->
             Printf.printf "\t\t} ELSE {\n";
             List.iter pprint_stmt statements;
             Printf.printf "\t\t}\n"
-        | None -> Printf.printf "\t\t}\n")
+        | None -> Printf.printf "\t\t}\n"
+        end
+    | Ast.Exp(e) -> Printf.printf "%s" (exp_to_string e) 
 
 let pprint_function_body (Ast.Body(stmts)) =
     print_string "\tbody:\n";
