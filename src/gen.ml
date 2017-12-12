@@ -10,12 +10,12 @@ let generate filename prog =
     let _ = Printf.fprintf chan "    .globl _main\n" in
 
     (* generate code to execute expression and move result into eax *)
-    let rec generate_exp exp var_map stack_index =
+    let rec generate_exp exp var_map =
         match exp with
         | Ast.BinOp(op, e1, e2) ->
-            let _ = generate_exp e1 var_map stack_index in
+            let _ = generate_exp e1 var_map in
             let _ = Printf.fprintf chan "    push %%eax\n"  in
-            let _ = generate_exp e2 var_map stack_index in
+            let _ = generate_exp e2 var_map in
             let _ =
                 begin(* op s, d computes d = op(d,s), so put e2 in ecx, e1 in eax *) 
                     Printf.fprintf chan "    movl %%eax, %%ecx\n";
@@ -32,7 +32,7 @@ let generate filename prog =
             | Ast.Mult -> Printf.fprintf chan "    imul %%ecx, %%eax\n";
             | _ -> failwith("binop not yet implemented"))
         | Ast.UnOp(op, e) ->
-            generate_exp e var_map stack_index;
+            generate_exp e var_map;
             (match op with
             | Ast.Pos -> ()(* No-op for now - eventually handle casting to int if needed *)
             | Ast.Negate -> Printf.fprintf chan "    neg %%eax\n";
@@ -47,39 +47,29 @@ let generate filename prog =
             Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index;
         | Ast.FunCall(Ast.ID id, args) ->
             let arg_count = List.length args in
-            let _ = put_args_on_stack args var_map stack_index in
-            (* Printf.fprintf chan "    addl    $%d, %%esp\n" (stack_index + 4); *)
+            let _ = put_args_on_stack args var_map in
             Printf.fprintf chan "    call _%s\n" id;
             Printf.fprintf chan "    addl $%d, %%esp\n" (arg_count * 4);
-            (* Printf.fprintf chan "    subl    $%d, %%esp\n" (stack_index + 4); *)
         | Ast.Const(Ast.Int i) -> 
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
         | Ast.Const(Ast.Char c) ->
             Printf.fprintf chan "    movl    $%d, %%eax\n" (Char.code c);
         | _ -> failwith("Constant not supported") 
 
-    and put_args_on_stack args var_map stack_index =
+    and put_args_on_stack args var_map =
         let push_arg arg = 
-            generate_exp arg var_map stack_index;
+            generate_exp arg var_map;
             Printf.fprintf chan "    pushl %%eax\n";
         in
         List.iter push_arg (List.rev args)
-    (*
-        match args with 
-        | [] -> ()
-        | item::items -> 
-             decrement 4 to save a spot on the stack for return value
-            let stack_index = stack_index - 4 in 
-            generate_exp item var_map stack_index;
-            Printf.fprintf chan "    movl    %%eax, %d(%%esp)\n" stack_index;
-            put_args_on_stack items var_map (stack_index - 4); *) in
+    in
 
     let rec generate_statement statement var_map stack_index =
         match statement with
         (* for return statements, variable map/stack index unchanged *)
         | Ast.DeclareVar(t, Ast.ID(varname), rhs) ->
             let _ = match rhs with
-                | Some exp -> generate_exp exp var_map stack_index
+                | Some exp -> generate_exp exp var_map
                 | None -> () in
             (* push value of var onto stack *)
             let _ = Printf.fprintf chan "    push %%eax\n" in
@@ -87,7 +77,7 @@ let generate filename prog =
             let stack_index = stack_index - 4 in
             var_map, stack_index
         | Ast.Assign(Ast.ID(id), exp) ->
-            let _ = generate_exp exp var_map stack_index in
+            let _ = generate_exp exp var_map in
             (* get location of variable on stack *)
             let var_index = Map.find id var_map in
             (* move value  of eax to that variable *)
@@ -96,7 +86,7 @@ let generate filename prog =
             var_map, stack_index
         | Ast.If(cond, body, else_body) ->
             (* evaluate condition *)
-            let _ = generate_exp cond var_map stack_index in
+            let _ = generate_exp cond var_map in
             let post_if_label = Util.unique_id "post_if" in
             let _ = (* stuff that's the same whether or not there's an else block *)
                 (* compare cond to false *)
@@ -121,9 +111,9 @@ let generate filename prog =
                 (* print out label that comes after if statement *)
                 Printf.fprintf chan "%s:\n" post_if_label; 
                 var_map, stack_index)
-        | Ast.Exp(e) -> generate_exp e var_map stack_index; var_map, stack_index
+        | Ast.Exp(e) -> generate_exp e var_map; var_map, stack_index
         | Ast.ReturnVal exp -> 
-            let _ = generate_exp exp var_map stack_index in
+            let _ = generate_exp exp var_map in
             begin
                 Printf.fprintf chan "    movl %%ebp, %%esp\n";
                 Printf.fprintf chan "    pop %%ebp\n";
