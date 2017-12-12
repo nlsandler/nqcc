@@ -34,7 +34,6 @@ let rec compare_statements expected actual =
             | _ -> false)
     | Ast.Assign(id1, rhs1), Ast.Assign(id2, rhs2) ->
         compare_ids id1 id2 && compare_exps rhs1 rhs2
-    | Ast.Return, Ast.Return -> true
     | Ast.ReturnVal(v1), Ast.ReturnVal(v2) -> compare_exps v1 v2
     | Ast.If(cond1, then1, else1), Ast.If(cond2, then2, else2) ->
         compare_exps cond1 cond2 && List.for_all2 compare_statements then1 then2 &&

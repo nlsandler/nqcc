@@ -66,7 +66,7 @@ let get_id t =
     | "char" -> CharKeyword
     | "if" -> IfKeyword
     | "else" -> ElseKeyword
-    | _ -> Id(t)
+    | _ -> Id t
 
 let lex_complex_token input =
     if Str.string_match int_regexp input 0
@@ -77,12 +77,12 @@ let lex_complex_token input =
         then failwith("Invalid int literal") 
         else
             let rest = Str.matched_group 4 input in
-            Tok.Int(int_val), rest
+            (Tok.Int int_val), rest
     else if Str.string_match char_regexp input 0
     then (* it's a char *)
         let char_token = Str.matched_group 1 input in
         let rest = Str.matched_group 3 input in
-        Tok.Char(get_char char_token), rest
+        (Tok.Char (get_char char_token)), rest
     else if Str.string_match id_regexp input 0
     then (* it's an ID, possibly a keyword *)
         let id_token_str = Str.matched_group 1 input in

@@ -119,7 +119,6 @@ let parse_assignment = function
     | _ -> failwith("Invalid assignment statement")
 
 let parse_return_statement = function
-    | Tok.ReturnKeyword::(Tok.Semicolon::_ as rest) -> Ast.Return, rest
     | Tok.ReturnKeyword::rest ->
         let exp, rest = parse_exp rest in
         Ast.ReturnVal(exp), rest

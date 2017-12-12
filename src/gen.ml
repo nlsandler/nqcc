@@ -116,7 +116,6 @@ let generate filename prog =
                 Printf.fprintf chan "%s:\n" post_if_label; 
                 var_map, stack_index)
         | Ast.Exp(e) -> generate_exp e var_map stack_index; var_map, stack_index
-        | Ast.Return -> Printf.fprintf chan "    ret\n"; var_map, stack_index
         | Ast.ReturnVal exp -> 
             let _ = generate_exp exp var_map stack_index in
             Printf.fprintf chan "    ret\n"; var_map, stack_index

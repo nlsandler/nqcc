@@ -30,7 +30,6 @@ type statement =
     | Assign of id * exp
     | If of exp * statement list * statement list option (* condition, if body, optional else body *)
     | Exp of exp
-    | Return
     | ReturnVal of exp (* should we add a return_exp instead? *)
 type fun_param = Param of type_def * id
 type fun_body = Body of statement list

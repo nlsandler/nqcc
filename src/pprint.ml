@@ -51,7 +51,6 @@ let rec pprint_stmt = function
         | Some e -> Printf.printf "\t\t%s %s = %s\n" (type_to_string var_type) var_name (exp_to_string e))
     | Ast.Assign(Ast.ID(var_name), rhs) ->
         Printf.printf "\t\t%s = %s\n" var_name (exp_to_string rhs)
-    | Ast.Return -> print_string "\t\tRETURN\n"
     | Ast.ReturnVal(e) -> Printf.printf "\t\tRETURN %s\n" (exp_to_string e)
     | Ast.If(cond, then_body, else_body) ->
         Printf.printf "\t\tIF (%s) {\n" (exp_to_string cond);
