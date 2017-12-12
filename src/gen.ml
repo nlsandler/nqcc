@@ -14,24 +14,22 @@ let generate filename prog =
         match exp with
         | Ast.BinOp(op, e1, e2) ->
             let _ = generate_exp e1 var_map stack_index in
-            let _ = Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index in
-            let _ = generate_exp e2 var_map (stack_index - 4) in
+            let _ = Printf.fprintf chan "    push %%eax\n"  in
+            let _ = generate_exp e2 var_map stack_index in
             let _ =
-                begin(* op s, d computes d = op(d,s), so swap eax w/ stack *) 
-                    Printf.fprintf chan "    movl %%eax, %%edx\n";
+                begin(* op s, d computes d = op(d,s), so put e2 in ecx, e1 in eax *) 
+                    Printf.fprintf chan "    movl %%eax, %%ecx\n";
                     (* Put e1 in eax (where it needs to be for idiv) *)
-                    Printf.fprintf chan "    movl %d(%%esp), %%eax\n" stack_index;
-                    (* Now put e2 in esp, overwriting where e1 WAS on the stack *)
-                    Printf.fprintf chan "    movl %%edx, %d(%%esp)\n" stack_index;
+                    Printf.fprintf chan "    pop %%eax\n";
                 end in
             (match op with 
             | Ast.Div ->                        
                     (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
                     Printf.fprintf chan "    xor %%edx, %%edx\n";
-                    Printf.fprintf chan "    idivl %d(%%esp)\n" stack_index;
-            | Ast.Sub -> Printf.fprintf chan "    subl %d(%%esp), %%eax\n" stack_index;
-            | Ast.Add -> Printf.fprintf chan "    addl %d(%%esp), %%eax\n" stack_index;
-            | Ast.Mult -> Printf.fprintf chan "    imul %d(%%esp), %%eax\n" stack_index;
+                    Printf.fprintf chan "    idivl %%ecx\n";
+            | Ast.Sub -> Printf.fprintf chan "    subl %%ecx, %%eax\n"
+            | Ast.Add -> Printf.fprintf chan "    addl %%ecx, %%eax\n";
+            | Ast.Mult -> Printf.fprintf chan "    imul %%ecx, %%eax\n";
             | _ -> failwith("binop not yet implemented"))
         | Ast.UnOp(op, e) ->
             generate_exp e var_map stack_index;
@@ -46,12 +44,14 @@ let generate filename prog =
         | Ast.Var(Ast.ID id) ->
             let var_index = Map.find id var_map in
             (* move value  of variable to eax *)
-            Printf.fprintf chan "    movl %d(%%esp), %%eax\n" var_index;
+            Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index;
         | Ast.FunCall(Ast.ID id, args) ->
+            let arg_count = List.length args in
             let _ = put_args_on_stack args var_map stack_index in
-            Printf.fprintf chan "    addl    $%d, %%esp\n" (stack_index + 4);
+            (* Printf.fprintf chan "    addl    $%d, %%esp\n" (stack_index + 4); *)
             Printf.fprintf chan "    call _%s\n" id;
-            Printf.fprintf chan "    subl    $%d, %%esp\n" (stack_index + 4);
+            Printf.fprintf chan "    addl $%d, %%esp\n" (arg_count * 4);
+            (* Printf.fprintf chan "    subl    $%d, %%esp\n" (stack_index + 4); *)
         | Ast.Const(Ast.Int i) -> 
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
         | Ast.Const(Ast.Char c) ->
@@ -59,14 +59,20 @@ let generate filename prog =
         | _ -> failwith("Constant not supported") 
 
     and put_args_on_stack args var_map stack_index =
+        let push_arg arg = 
+            generate_exp arg var_map stack_index;
+            Printf.fprintf chan "    pushl %%eax\n";
+        in
+        List.iter push_arg (List.rev args)
+    (*
         match args with 
         | [] -> ()
-        | item::items ->
-            (* decrement 4 to save a spot on the stack for return value *)
+        | item::items -> 
+             decrement 4 to save a spot on the stack for return value
             let stack_index = stack_index - 4 in 
             generate_exp item var_map stack_index;
             Printf.fprintf chan "    movl    %%eax, %d(%%esp)\n" stack_index;
-            put_args_on_stack items var_map (stack_index - 4); in
+            put_args_on_stack items var_map (stack_index - 4); *) in
 
     let rec generate_statement statement var_map stack_index =
         match statement with
@@ -76,7 +82,7 @@ let generate filename prog =
                 | Some exp -> generate_exp exp var_map stack_index
                 | None -> () in
             (* push value of var onto stack *)
-            let _ = Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" stack_index in
+            let _ = Printf.fprintf chan "    push %%eax\n" in
             let var_map = Map.add varname stack_index var_map in
             let stack_index = stack_index - 4 in
             var_map, stack_index
@@ -85,7 +91,7 @@ let generate filename prog =
             (* get location of variable on stack *)
             let var_index = Map.find id var_map in
             (* move value  of eax to that variable *)
-            Printf.fprintf chan "    movl %%eax, %d(%%esp)\n" var_index;
+            Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index;
             (* var_map, stack_index stay the same *)
             var_map, stack_index
         | Ast.If(cond, body, else_body) ->
@@ -118,7 +124,12 @@ let generate filename prog =
         | Ast.Exp(e) -> generate_exp e var_map stack_index; var_map, stack_index
         | Ast.ReturnVal exp -> 
             let _ = generate_exp exp var_map stack_index in
-            Printf.fprintf chan "    ret\n"; var_map, stack_index
+            begin
+                Printf.fprintf chan "    movl %%ebp, %%esp\n";
+                Printf.fprintf chan "    pop %%ebp\n";
+                Printf.fprintf chan "    ret\n"; 
+                var_map, stack_index
+            end
 
     and generate_statement_list statements var_map stack_index =
         match statements with
@@ -130,9 +141,17 @@ let generate filename prog =
     let generate_fun f = 
         match f with
         | Ast.FunDecl(fun_type, Ast.ID(fun_name), fun_params, Ast.Body(statements)) ->
-            let _ = Printf.fprintf chan "_%s:\n" fun_name in
-            let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si - 4)) (Map.empty, -4) fun_params in
-            generate_statement_list statements var_map stack_index in
+            let _ = begin
+                Printf.fprintf chan "_%s:\n" fun_name;
+                Printf.fprintf chan "    push %%ebp\n";
+                Printf.fprintf chan "    movl %%esp, %%ebp\n"
+            end
+            in
+            (* arguments are just below return address, which is just below EBP, so first arg at ebp + 8 
+                reverse fun_params b/c they go on stack right to left
+            *)
+            let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si + 4)) (Map.empty, 8) (List.rev fun_params) in
+            generate_statement_list statements var_map (-4) in (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
 
     let rec generate_funs = function
         | [] -> ()
