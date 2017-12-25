@@ -242,20 +242,7 @@ and parse_statement_list tokens =
     else
         let next_statement, rest = parse_statement tokens in
         let statements, rest = parse_statement_list rest in
-        next_statement::statements, rest
-(*
-    match tokens with
-    | Tok.ReturnKeyword::rest -> 
-        let ret, rest = parse_return_statement tokens in
-        [ret], rest 
-    | _ ->
-        let next_statement, rest = parse_statement tokens in
-            if (List.hd rest == Tok.Semicolon)
-            then 
-                let statements, rest = parse_statement_list (List.tl rest) in
-                next_statement::statements, rest
-            else failwith("Expected semicolon at end of statement")
-*)        
+        next_statement::statements, rest        
 
 let parse_fun_body tokens = (* Assume for now there's nothing after function body *)
     let statements, rest = parse_statement_list tokens in
