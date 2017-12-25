@@ -68,6 +68,8 @@ let lex_punctuation_tests = [
     "test_lex_ge" >:: test_lex_single ">=" (Tok.Ge);
     "test_lex_lt" >:: test_lex_single "<" (Tok.Lt);
     "test_lex_le" >:: test_lex_single "<=" (Tok.Le);
+    "test_lex_and" >:: test_lex_single "&&" (Tok.And);
+    "test_lex_or" >:: test_lex_single "||" (Tok.Or)
 ]
 
 let lex_id_tests = [

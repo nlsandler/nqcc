@@ -225,6 +225,33 @@ let binop_parse_tests = [
     "test_associativity" >:: test_compare_asts associativity_tokens associativity_ast;
 ]
 
+(* BOOLEAN BINOPS *)
+
+let and_tokens = Lex.lex "int main() {return 1&&2;}"
+let and_ast =
+    let binop = Ast.BinOp(Ast.And, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    make_simple_ast [] binop
+
+let or_tokens = Lex.lex "int main() {return 1||2;}"
+let or_ast =
+    let binop = Ast.BinOp(Ast.Or, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    make_simple_ast [] binop
+
+(* addition is higher precedence than &&, which is higher precedence than || *)
+let bool_precedence_tokens = Lex.lex "int main() {return 1 || 2 && 3 + 4;}"
+let bool_precedence_ast =
+    let add_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(3)), Ast.Const(Ast.Int(4))) in
+    let and_binop = Ast.BinOp(Ast.And, Ast.Const(Ast.Int(2)), add_binop) in
+    let or_binop = Ast.BinOp(Ast.Or, Ast.Const(Ast.Int(1)), and_binop) in
+    make_simple_ast [] or_binop
+
+let boolean_binop_tests = [
+    "test_and" >:: test_compare_asts and_tokens and_ast;
+    "test_or" >:: test_compare_asts or_tokens or_ast;
+    "test_bool_precedence" >:: test_compare_asts bool_precedence_tokens bool_precedence_ast;
+]
+
+
 (* COMPARISON OPERATORS *)
 
 let compare_eq_tokens = Lex.lex "int main() {return 1==2;}"
@@ -358,4 +385,5 @@ let failure_parse_tests = [
 ]
 
 (* TODO: add comp parse test *)
-let parse_tests = basic_parse_tests@unop_parse_tests@binop_parse_tests@variable_parse_tests@conditional_parse_tests@fun_call_parse_tests@failure_parse_tests
+let parse_tests = basic_parse_tests@unop_parse_tests@binop_parse_tests@boolean_binop_tests
+                @comp_parse_tests@variable_parse_tests@conditional_parse_tests@fun_call_parse_tests@failure_parse_tests

@@ -117,6 +117,8 @@ and lex_rest words =
     | '-'::rest -> Minus::(lex_rest rest)
     | '*'::rest -> Mult::(lex_rest rest)
     | '/'::rest -> Div::(lex_rest rest)
+    | '&'::'&'::rest -> And::(lex_rest rest)
+    | '|'::'|'::rest -> Or::(lex_rest rest)
     | '~'::rest -> Complement::(lex_rest rest)
     | '!'::rest -> Bang::(lex_rest rest)
     | '='::'='::rest -> DoubleEq::(lex_rest rest)
@@ -150,6 +152,8 @@ let tok_to_string t =
     | Ge -> ">="
     | Lt -> "<"
     | Gt -> ">"
+    | And -> "&&"
+    | Or -> "||"
     | IntKeyword -> "INT"
     | CharKeyword -> "CHAR"
     | ReturnKeyword -> "RETURN"

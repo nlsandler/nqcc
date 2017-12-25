@@ -81,7 +81,7 @@ and parse_term toks =
     let left, rest = parse_factor toks in
     build_term left rest
 
-and build_exp left_term toks =
+and build_additive_exp left_term toks =
     match toks with
     | (Tok.Plus)::right -> 
         let right_term, rest = parse_term right in
@@ -93,10 +93,73 @@ and build_exp left_term toks =
         build_exp left_term rest        
     | _ -> left_term, toks 
 
-and parse_exp toks =
+and parse_additive_exp toks =
     let left, rest = parse_term toks in
-    build_exp left rest
+    build_additive_exp left rest
 
+and build_relational_exp left_exp toks =
+    match toks with
+    | (Tok.Lt)::right ->
+        let right_exp, rest = parse_additive_exp right in
+        let left_exp = (Ast.BinOp(Ast.Lt, left_exp, right_exp)) in
+        build_relational_exp left_exp rest
+    | (Tok.Le)::right ->
+        let right_exp, rest = parse_additive_exp right in
+        let left_exp = (Ast.BinOp(Ast.Le, left_exp, right_exp)) in
+        build_relational_exp left_exp rest    
+    | (Tok.Gt)::right ->
+        let right_exp, rest = parse_additive_exp right in
+        let left_exp = (Ast.BinOp(Ast.Gt, left_exp, right_exp)) in
+        build_relational_exp left_exp rest
+    | (Tok.Ge)::right ->
+        let right_exp, rest = parse_additive_exp right in
+        let left_exp = (Ast.BinOp(Ast.Ge, left_exp, right_exp)) in
+        build_relational_exp left_exp rest
+    | _ -> left_exp, toks
+
+and parse_relational_exp toks =
+    let left, rest = parse_additive_exp toks in
+    build_relational_exp left rest
+
+and build_equality_exp left_exp toks =
+    match toks with
+    | (Tok.DoubleEq)::right ->
+        let right_exp, rest = parse_relational_exp right in
+        let left_exp = (Ast.BinOp(Ast.Eq, left_exp, right_exp)) in
+        build_equality_exp left_exp rest
+    | (Tok.Neq)::right ->
+        let right_exp, rest = parse_relational_exp right in
+        let left_exp = (Ast.BinOp(Ast.Neq, left_exp, right_exp)) in
+        build_equality_exp left_exp rest
+    | _ -> left_exp, toks
+
+and parse_equality_exp toks =
+    let left, rest = parse_relational_exp toks in
+    build_equality_exp left rest
+
+and build_and_exp left_exp toks =
+    match toks with
+    | (Tok.And)::right ->
+        let right_exp, rest = parse_equality_exp right in
+        let left_exp = (Ast.BinOp (Ast.And, left_exp, right_exp)) in
+        build_and_exp left_exp rest
+    | _ -> left_exp, toks
+
+and parse_and_exp toks =
+    let left, rest = parse_equality_exp toks in
+    build_and_exp left rest
+
+and build_exp left_exp toks =
+    match toks with
+    | (Tok.Or)::right ->
+        let right_exp, rest = parse_and_exp right in
+        let left_exp = (Ast.BinOp (Ast.Or, left_exp, right_exp)) in
+        build_exp left_exp rest
+    | _ -> left_exp, toks
+
+and parse_exp toks =
+    let left, rest = parse_and_exp toks in
+    build_exp left rest
 
 let parse_declaration var_type tokens =
     match tokens with

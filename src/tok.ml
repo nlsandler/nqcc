@@ -24,6 +24,8 @@ type token =
     | Le (* <= *)
     | Gt (* > *)
     | Ge (* >= *)
+    | And (* && *)
+    | Or (* || *)
     | Int of int
     | Char of char
     | Id of string

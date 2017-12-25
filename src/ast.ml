@@ -16,7 +16,9 @@ type binop =
     | Le 
     | Ge
     | Neq
-    | Eq 
+    | Eq
+    | And
+    | Or
 type unop = Negate | Pos | Complement | Not
 type id = ID of string
 type exp = 
