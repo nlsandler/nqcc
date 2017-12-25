@@ -30,7 +30,46 @@ let generate filename prog =
             | Ast.Sub -> Printf.fprintf chan "    subl %%ecx, %%eax\n"
             | Ast.Add -> Printf.fprintf chan "    addl %%ecx, %%eax\n";
             | Ast.Mult -> Printf.fprintf chan "    imul %%ecx, %%eax\n";
-            | _ -> failwith("binop not yet implemented"))
+            (* TODO: refactor comparison/relational ops, only "set" changes *)
+            | Ast.Eq ->
+                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
+                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    sete %%al\n"
+            | Ast.Neq ->
+                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
+                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    setne %%al\n"
+            | Ast.Lt ->
+                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
+                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    setl %%al\n"
+            | Ast.Le ->
+                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
+                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    setle %%al\n"
+            | Ast.Gt ->
+                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
+                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    setg %%al\n"
+            | Ast.Ge ->
+                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
+                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    setge %%al\n"
+            | Ast.Or ->
+                Printf.fprintf chan "    orl %%eax, %%ecx\n";
+                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    setne %%al\n"
+            | Ast.And ->
+                (* if eax != 0, set eax = 1 *)
+                Printf.fprintf chan "    cmp $0, %%eax\n";
+                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    setne %%al\n";
+                (* if ecx != 0, set ecx = 1 *)
+                Printf.fprintf chan "    cmp $0, %%ecx\n";
+                Printf.fprintf chan "    movl $0, %%ecx\n";
+                Printf.fprintf chan "    setne %%cl\n";
+                (* eax = eax && ecx *)
+                Printf.fprintf chan "    andb %%cl, %%al\n")
         | Ast.UnOp(op, e) ->
             generate_exp e var_map;
             (match op with

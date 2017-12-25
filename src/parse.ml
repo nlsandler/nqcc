@@ -40,6 +40,7 @@ and parse_function_arguments = function
             | _ -> failwith("Invalid list of function arguments")  in
         arg::args, rest
 
+(* TODO: refactor factor/term/expression parsing, it's redundant! *)
 and parse_factor toks =
     match toks with
     | Tok.OpenParen::factor -> 
