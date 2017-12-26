@@ -9,6 +9,11 @@ let generate filename prog =
     (* main is always entry point *)
     let _ = Printf.fprintf chan "    .globl _main\n" in
 
+    let emit_comparison set_instruction =
+        Printf.fprintf chan "    cmp %%eax, %%ecx\n";
+        Printf.fprintf chan "    movl $0, %%eax\n";
+        Printf.fprintf chan "    %s %%al\n" set_instruction in
+
     (* generate code to execute expression and move result into eax *)
     let rec generate_exp exp var_map =
         match exp with
@@ -30,31 +35,12 @@ let generate filename prog =
             | Ast.Sub -> Printf.fprintf chan "    subl %%ecx, %%eax\n"
             | Ast.Add -> Printf.fprintf chan "    addl %%ecx, %%eax\n";
             | Ast.Mult -> Printf.fprintf chan "    imul %%ecx, %%eax\n";
-            (* TODO: refactor comparison/relational ops, only "set" changes *)
-            | Ast.Eq ->
-                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
-                Printf.fprintf chan "    movl $0, %%eax\n";
-                Printf.fprintf chan "    sete %%al\n"
-            | Ast.Neq ->
-                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
-                Printf.fprintf chan "    movl $0, %%eax\n";
-                Printf.fprintf chan "    setne %%al\n"
-            | Ast.Lt ->
-                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
-                Printf.fprintf chan "    movl $0, %%eax\n";
-                Printf.fprintf chan "    setl %%al\n"
-            | Ast.Le ->
-                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
-                Printf.fprintf chan "    movl $0, %%eax\n";
-                Printf.fprintf chan "    setle %%al\n"
-            | Ast.Gt ->
-                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
-                Printf.fprintf chan "    movl $0, %%eax\n";
-                Printf.fprintf chan "    setg %%al\n"
-            | Ast.Ge ->
-                Printf.fprintf chan "    cmp %%eax, %%ecx\n";
-                Printf.fprintf chan "    movl $0, %%eax\n";
-                Printf.fprintf chan "    setge %%al\n"
+            | Ast.Eq -> emit_comparison "sete"
+            | Ast.Neq -> emit_comparison "setne"
+            | Ast.Lt -> emit_comparison "setl"
+            | Ast.Le -> emit_comparison "setle"
+            | Ast.Gt -> emit_comparison "setg"
+            | Ast.Ge -> emit_comparison "setge"
             | Ast.Or ->
                 Printf.fprintf chan "    orl %%eax, %%ecx\n";
                 Printf.fprintf chan "    movl $0, %%eax\n";
