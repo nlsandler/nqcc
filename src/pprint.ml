@@ -25,7 +25,14 @@ let op_to_string = function
     | Ast.Sub -> "-"
     | Ast.Mult -> "*"
     | Ast.Div -> "/"
-    | _ -> failwith("comparison ops not implemented")
+    | Ast.Lt -> "<"
+    | Ast.Le -> "<="
+    | Ast.Gt -> ">"
+    | Ast.Ge -> ">="
+    | Ast.Neq -> "!="
+    | Ast.Eq -> "=="
+    | Ast.And -> "&&"
+    | Ast.Or -> "||"
 
 let unop_to_string = function
     | Ast.Negate -> "-"
