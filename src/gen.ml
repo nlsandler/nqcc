@@ -32,9 +32,20 @@ let generate filename prog =
                     (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
                     Printf.fprintf chan "    xor %%edx, %%edx\n";
                     Printf.fprintf chan "    idivl %%ecx\n";
+            | Ast.Mod ->
+                    (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
+                    Printf.fprintf chan "    xor %%edx, %%edx\n";
+                    Printf.fprintf chan "    idivl %%ecx\n";
+                    (* remainder stored in edx, move it to eax *)
+                    Printf.fprintf chan "    movl %%edx, %%eax\n"
             | Ast.Sub -> Printf.fprintf chan "    subl %%ecx, %%eax\n"
             | Ast.Add -> Printf.fprintf chan "    addl %%ecx, %%eax\n";
             | Ast.Mult -> Printf.fprintf chan "    imul %%ecx, %%eax\n";
+            | Ast.Xor -> Printf.fprintf chan "    xor %%ecx, %%eax\n";
+            | Ast.BitAnd -> Printf.fprintf chan "    and %%ecx, %%eax\n";
+            | Ast.BitOr -> Printf.fprintf chan "    or %%ecx, %%eax\n";
+            | Ast.ShiftL -> Printf.fprintf chan "    sall %%cl, %%eax\n";
+            | Ast.ShiftR -> Printf.fprintf chan "    sarl %%cl, %%eax\n";
             | Ast.Eq -> emit_comparison "sete"
             | Ast.Neq -> emit_comparison "setne"
             | Ast.Lt -> emit_comparison "setl"
