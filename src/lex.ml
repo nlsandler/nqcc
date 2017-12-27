@@ -109,6 +109,8 @@ and lex_rest words =
     | ','::rest -> Comma::(lex_rest rest)
     | '+'::rest -> Plus::(lex_rest rest)
     | '-'::'-'::rest -> failwith("decrement not yet implemented")
+    | '<'::'<'::rest -> ShiftLeft::(lex_rest rest)
+    | '>'::'>'::rest -> ShiftRight::(lex_rest rest)
     | '!'::'='::rest -> Neq::(lex_rest rest)
     | '<'::'='::rest -> Le::(lex_rest rest)
     | '>'::'='::rest -> Ge::(lex_rest rest)
@@ -117,8 +119,12 @@ and lex_rest words =
     | '-'::rest -> Minus::(lex_rest rest)
     | '*'::rest -> Mult::(lex_rest rest)
     | '/'::rest -> Div::(lex_rest rest)
+    | '%'::rest -> Mod::(lex_rest rest)
     | '&'::'&'::rest -> And::(lex_rest rest)
+    | '&'::rest -> BitAnd::(lex_rest rest)
     | '|'::'|'::rest -> Or::(lex_rest rest)
+    | '|'::rest -> BitOr::(lex_rest rest)
+    | '^'::rest -> Xor::(lex_rest rest)
     | '~'::rest -> Complement::(lex_rest rest)
     | '!'::rest -> Bang::(lex_rest rest)
     | '='::'='::rest -> DoubleEq::(lex_rest rest)
@@ -143,6 +149,7 @@ let tok_to_string t =
     | Minus -> "-"
     | Mult -> "*"
     | Div -> "/"
+    | Mod -> "%"
     | Complement -> "~"
     | Bang -> "!"
     | Eq -> "="
@@ -154,6 +161,11 @@ let tok_to_string t =
     | Gt -> ">"
     | And -> "&&"
     | Or -> "||"
+    | BitAnd -> "&"
+    | BitOr -> "|"
+    | Xor -> "^"
+    | ShiftLeft -> "<<"
+    | ShiftRight -> ">>"
     | IntKeyword -> "INT"
     | CharKeyword -> "CHAR"
     | ReturnKeyword -> "RETURN"

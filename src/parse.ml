@@ -29,6 +29,7 @@ let op_map = Map.empty
     |> Map.add Tok.Minus Ast.Sub
     |> Map.add Tok.Mult Ast.Mult
     |> Map.add Tok.Div Ast.Div
+    |> Map.add Tok.Mod Ast.Mod
     |> Map.add Tok.Lt Ast.Lt
     |> Map.add Tok.Le Ast.Le
     |> Map.add Tok.Gt Ast.Gt
@@ -37,6 +38,11 @@ let op_map = Map.empty
     |> Map.add Tok.Neq Ast.Neq
     |> Map.add Tok.And Ast.And
     |> Map.add Tok.Or Ast.Or
+    |> Map.add Tok.ShiftLeft Ast.ShiftL
+    |> Map.add Tok.ShiftRight Ast.ShiftR
+    |> Map.add Tok.BitAnd Ast.BitAnd
+    |> Map.add Tok.BitOr Ast.BitOr
+    |> Map.add Tok.Xor Ast.Xor
 
 let mk_parse_exp parse_fn build_fn toks =
     let left, rest = parse_fn toks in
@@ -96,7 +102,7 @@ and parse_factor toks =
     | Tok.Char(c)::rest -> Ast.Const(Ast.Char(c)), rest
     | _ -> failwith("Failed to parse factor")
 
-and build_term left_factor toks = (mk_build_exp parse_factor [Tok.Mult; Tok.Div]) left_factor toks
+and build_term left_factor toks = (mk_build_exp parse_factor [Tok.Mult; Tok.Div; Tok.Mod]) left_factor toks
 
 and parse_term toks = (mk_parse_exp parse_factor build_term) toks
 
@@ -104,17 +110,33 @@ and build_additive_exp left_factor toks = (mk_build_exp parse_term [Tok.Plus; To
 
 and parse_additive_exp toks = (mk_parse_exp parse_term build_additive_exp) toks
 
-and build_relational_exp left_factor toks = (mk_build_exp parse_additive_exp [Tok.Lt; Tok.Le; Tok.Gt; Tok.Ge]) left_factor toks
+and build_shift_exp left_factor toks = (mk_build_exp parse_additive_exp [Tok.ShiftLeft; Tok.ShiftRight]) left_factor toks
 
-and parse_relational_exp toks = (mk_parse_exp parse_additive_exp build_relational_exp) toks
+and parse_shift_exp toks = (mk_parse_exp parse_additive_exp build_shift_exp) toks
+
+and build_relational_exp left_factor toks = (mk_build_exp parse_shift_exp [Tok.Lt; Tok.Le; Tok.Gt; Tok.Ge]) left_factor toks
+
+and parse_relational_exp toks = (mk_parse_exp parse_shift_exp build_relational_exp) toks
 
 and build_equality_exp left_exp toks = (mk_build_exp parse_relational_exp [Tok.DoubleEq; Tok.Neq]) left_exp toks
 
 and parse_equality_exp toks = (mk_parse_exp parse_relational_exp build_equality_exp) toks
 
-and build_and_exp left_exp toks = (mk_build_exp parse_equality_exp [Tok.And]) left_exp toks
+and build_bitwise_and_exp left_exp toks = (mk_build_exp parse_equality_exp [Tok.BitAnd]) left_exp toks
 
-and parse_and_exp toks = (mk_parse_exp parse_equality_exp build_and_exp) toks
+and parse_bitwise_and_exp toks = (mk_parse_exp parse_equality_exp build_bitwise_and_exp) toks
+
+and build_xor_exp left_exp toks = (mk_build_exp parse_bitwise_and_exp [Tok.Xor]) left_exp toks
+
+and parse_xor_exp toks = (mk_parse_exp parse_bitwise_and_exp build_xor_exp) toks
+
+and build_bitwise_or_exp left_exp toks = (mk_build_exp parse_xor_exp [Tok.BitOr]) left_exp toks
+
+and parse_bitwise_or_exp toks = (mk_parse_exp parse_xor_exp build_bitwise_or_exp) toks
+
+and build_and_exp left_exp toks = (mk_build_exp parse_bitwise_or_exp [Tok.And]) left_exp toks
+
+and parse_and_exp toks = (mk_parse_exp parse_bitwise_or_exp build_and_exp) toks
 
 and build_exp left_exp toks = (mk_build_exp parse_and_exp [Tok.Or]) left_exp toks
 

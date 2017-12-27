@@ -25,6 +25,7 @@ let op_to_string = function
     | Ast.Sub -> "-"
     | Ast.Mult -> "*"
     | Ast.Div -> "/"
+    | Ast.Mod -> "%"
     | Ast.Lt -> "<"
     | Ast.Le -> "<="
     | Ast.Gt -> ">"
@@ -33,6 +34,11 @@ let op_to_string = function
     | Ast.Eq -> "=="
     | Ast.And -> "&&"
     | Ast.Or -> "||"
+    | Ast.BitAnd -> "&"
+    | Ast.BitOr -> "|"
+    | Ast.Xor -> "^"
+    | Ast.ShiftL -> "<<"
+    | Ast.ShiftR -> ">>"
 
 let unop_to_string = function
     | Ast.Negate -> "-"

@@ -17,6 +17,7 @@ type token =
     | Minus
     | Mult
     | Div
+    | Mod
     | Eq (* = *)
     | DoubleEq (* == *)
     | Neq (* != *)
@@ -26,6 +27,11 @@ type token =
     | Ge (* >= *)
     | And (* && *)
     | Or (* || *)
+    | BitAnd (* & *)
+    | BitOr (* | *)
+    | Xor (* ^ *)
+    | ShiftLeft (* << *)
+    | ShiftRight (* >> *)
     | Int of int
     | Char of char
     | Id of string

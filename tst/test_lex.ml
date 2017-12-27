@@ -59,6 +59,7 @@ let lex_punctuation_tests = [
     "test_lex_minus" >:: test_lex_single "-" (Tok.Minus);
     "test_lex_product" >:: test_lex_single "*" (Tok.Mult);
     "test_lex_divide" >:: test_lex_single "/" (Tok.Div);
+    "test_lex_modulo" >:: test_lex_single "%" (Tok.Mod);
     "test_lex_complement" >:: test_lex_single "~" (Tok.Complement);
     "test_lex_bang" >:: test_lex_single "!" (Tok.Bang);
     "test_lex_eq" >:: test_lex_single "=" (Tok.Eq);
@@ -69,7 +70,12 @@ let lex_punctuation_tests = [
     "test_lex_lt" >:: test_lex_single "<" (Tok.Lt);
     "test_lex_le" >:: test_lex_single "<=" (Tok.Le);
     "test_lex_and" >:: test_lex_single "&&" (Tok.And);
-    "test_lex_or" >:: test_lex_single "||" (Tok.Or)
+    "test_lex_or" >:: test_lex_single "||" (Tok.Or);
+    "test_lex_bitwise_and" >:: test_lex_single "&" (Tok.BitAnd);
+    "test_lex_bitwise_or" >:: test_lex_single "|" (Tok.BitOr);
+    "test_lex_xor" >:: test_lex_single "^" (Tok.Xor);
+    "test_lex_shiftl" >:: test_lex_single "<<" (Tok.ShiftLeft);
+    "test_lex_shiftr" >:: test_lex_single ">>" (Tok.ShiftRight)
 ]
 
 let lex_id_tests = [

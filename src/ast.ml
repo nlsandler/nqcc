@@ -10,7 +10,8 @@ type binop =
     | Add 
     | Sub 
     | Mult 
-    | Div 
+    | Div
+    | Mod
     | Lt 
     | Gt 
     | Le 
@@ -19,6 +20,11 @@ type binop =
     | Eq
     | And
     | Or
+    | BitAnd
+    | BitOr
+    | Xor
+    | ShiftL
+    | ShiftR
 type unop = Negate | Pos | Complement | Not
 type id = ID of string
 type exp = 

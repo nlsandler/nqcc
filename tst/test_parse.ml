@@ -199,10 +199,18 @@ let lots_of_parens_add_ast =
     let ret_exp = Ast.BinOp(Ast.Add, e1, e2) in
     make_simple_ast [] ret_exp
 
-let precedence_tokens = Lex.lex "int main() {return 1*2+3;}"
+let mod_toks = Lex.lex "int main() {return 3%2;}"
+let mod_ast =
+    let e1 = Ast.Const(Ast.Int(3)) in
+    let e2 = Ast.Const(Ast.Int(2)) in
+    let ret_exp = Ast.BinOp(Ast.Mod, e1, e2) in
+    make_simple_ast [] ret_exp
+
+let precedence_tokens = Lex.lex "int main() {return 1*2+3%2;}"
 let precedence_ast = 
-    let inner_binop = Ast.BinOp(Ast.Mult, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
-    let outer_binop = Ast.BinOp(Ast.Add, inner_binop, Ast.Const(Ast.Int(3))) in
+    let e1 = Ast.BinOp(Ast.Mult, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let e2 = Ast.BinOp(Ast.Mod, Ast.Const(Ast.Int(3)), Ast.Const(Ast.Int(2))) in
+    let outer_binop = Ast.BinOp(Ast.Add, e1, e2) in
     make_simple_ast [] outer_binop
 
 let associativity_tokens = Lex.lex "int main() {return 1/2*3;}"
@@ -217,12 +225,48 @@ let binop_parse_tests = [
     "test_subtract_negative" >:: test_compare_asts subtract_negative_tokens subtract_negative_ast;
     "test_multiplication" >:: test_compare_asts mult_tokens mult_ast;
     "test_division" >:: test_compare_asts division_tokens division_ast;
+    "test_mod" >:: test_compare_asts mod_toks mod_ast;
     "test_nested_addition" >:: test_compare_asts nested_addition_tokens nested_addition_ast;
     "test_lots_of_parens" >:: test_compare_asts lots_of_parens_tokens lots_of_parens_ast;
     "test_left_nested_addition" >:: test_compare_asts left_nested_addition_tokens left_nested_addition_ast;
     "test_lots_of_parens_add" >:: test_compare_asts lots_of_parens_add_tokens lots_of_parens_add_ast;
     "test_precedence" >:: test_compare_asts precedence_tokens precedence_ast;
     "test_associativity" >:: test_compare_asts associativity_tokens associativity_ast;
+]
+
+(* BITWISE BINOPS *)
+
+let bitwise_and_tokens = Lex.lex "int main() {return 1&2;}"
+let bitwise_and_ast =
+    let binop = Ast.BinOp(Ast.BitAnd, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    make_simple_ast [] binop
+
+let bitwise_or_tokens = Lex.lex "int main() {return 1|2;}"
+let bitwise_or_ast =
+    let binop = Ast.BinOp(Ast.BitOr, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    make_simple_ast [] binop
+
+let xor_tokens = Lex.lex "int main() {return 1^2;}"
+let xor_ast =
+    let binop = Ast.BinOp(Ast.Xor, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    make_simple_ast [] binop
+
+let shiftl_tokens = Lex.lex "int main() {return 1<<2;}"
+let shiftl_ast =
+    let binop = Ast.BinOp(Ast.ShiftL, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    make_simple_ast [] binop
+
+let shiftr_tokens = Lex.lex "int main() {return 1>>2;}"
+let shiftr_ast =
+    let binop = Ast.BinOp(Ast.ShiftR, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    make_simple_ast [] binop
+
+let bitwise_binops_tests = [
+    "test_bitwise_and" >:: test_compare_asts bitwise_and_tokens bitwise_and_ast;
+    "test_bitwise_or" >:: test_compare_asts bitwise_or_tokens bitwise_or_ast;
+    "test_xor" >:: test_compare_asts xor_tokens xor_ast;
+    "test_shiftl" >:: test_compare_asts shiftl_tokens shiftl_ast;
+    "test_shiftr" >:: test_compare_asts shiftr_tokens shiftr_ast
 ]
 
 (* BOOLEAN BINOPS *)
@@ -386,4 +430,5 @@ let failure_parse_tests = [
 
 (* TODO: add comp parse test *)
 let parse_tests = basic_parse_tests@unop_parse_tests@binop_parse_tests@boolean_binop_tests
-                @comp_parse_tests@variable_parse_tests@conditional_parse_tests@fun_call_parse_tests@failure_parse_tests
+                @bitwise_binops_tests@comp_parse_tests@variable_parse_tests
+                @conditional_parse_tests@fun_call_parse_tests@failure_parse_tests
