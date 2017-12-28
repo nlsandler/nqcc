@@ -1,12 +1,3 @@
-(* GRAMMAR:
- * program -> function-definition
- * function-definition -> type id ( argument_list ) fun_body
- * argument_list -> type id | type id argument_list
- * fun_body -> { statement_list }
- * statement_list -> statement | statement statement_list
- * statement -> return | return exp
- * exp -> int
- *)
 open Batteries
 
 let rec parse_fun_params = function
@@ -24,6 +15,10 @@ let tok_to_const = function
     | Tok.Char c -> Ast.Const(Ast.Char c)
     | _ -> failwith("Not a constant")
 
+(* A map from a token to its corresponding Ast.binop.
+ * Note that some tokens also correspond to other, non-binop
+ * AST elements (e.g. Tok.Minus can also be parsed as unary minus),
+ * so only use this map when we're expecting a binop *)
 let op_map = Map.empty
     |> Map.add Tok.Plus Ast.Add
     |> Map.add Tok.Minus Ast.Sub
@@ -44,20 +39,42 @@ let op_map = Map.empty
     |> Map.add Tok.BitOr Ast.BitOr
     |> Map.add Tok.Xor Ast.Xor
 
-let mk_parse_exp parse_fn build_fn toks =
-    let left, rest = parse_fn toks in
-    build_fn left rest
+(**
+ * Parse one production rule for a binary operation.
+ * One production rule in the grammar corresponds to a particular precedence level.
+ * Parameters:
+ * - parse_next_level is a function to parse expressions 
+ *   at the next highest precedence level.
+ * - op_toks is the list of tokens that should be parsed at this precedence level.
+ * - toks is the tokenized source code to parse
+ * For example, to parse the production rule for addition and subtraction:
+ * <additive-exp> ::= <term> { ("+" | "-") <term> }
+ * We would invoke this function as follows:
+ * parse_bin_exp parse_term [Tok.Plus; Tok.Minus] toks
+ **)
+let parse_bin_exp parse_next_level op_toks toks =
+    (* call parse_next_level to parse first sub-expression *)
+    let left, rest = parse_next_level toks in
+    let rec add_terms left_exp toks =
+        let hd_tok = List.hd toks in
+        if (List.mem hd_tok op_toks) then
+            (* The first token after left_exp is an operator we care about,
+             * so there must be another sub-expression *)
 
-let mk_build_exp parse_fn op_toks =
-    let rec build_fn left_exp toks =
-        let op_tok = List.hd toks in
-        if (List.mem op_tok op_toks) then
-            let right_exp, rest = parse_fn (List.tl toks) in
-            let bin_op = Map.find op_tok op_map in
-            let left_exp = Ast.BinOp (bin_op, left_exp, right_exp) in
-            build_fn left_exp rest
-        else left_exp, toks in
-    build_fn
+            (* Parse the next sub-expression *)
+            let right_exp, rest = parse_next_level (List.tl toks) in
+            let bin_op = Map.find hd_tok op_map in
+            (* Construct BinOp AST node BEFORE parsing additional sub-expressions.
+             * This enforces left-associativity. *)
+            let left_exp = Ast.BinOp(bin_op, left_exp, right_exp) in
+            (* Try to parse more sub-expressions *)
+            add_terms left_exp rest
+        else
+            (* No more sub-expressions to add, return current exp *)
+            left_exp, toks
+        in
+    (* try adding more subexpressions *)
+    add_terms left rest
 
 let rec parse_function_call = function
     | Tok.Id(name)::Tok.OpenParen::arg_tokens ->
@@ -102,45 +119,25 @@ and parse_factor toks =
     | Tok.Char(c)::rest -> Ast.Const(Ast.Char(c)), rest
     | _ -> failwith("Failed to parse factor")
 
-and build_term left_factor toks = (mk_build_exp parse_factor [Tok.Mult; Tok.Div; Tok.Mod]) left_factor toks
+and parse_term toks = parse_bin_exp parse_factor [Tok.Mult; Tok.Div; Tok.Mod] toks
 
-and parse_term toks = (mk_parse_exp parse_factor build_term) toks
+and parse_additive_exp toks = parse_bin_exp parse_term [Tok.Plus; Tok.Minus] toks
 
-and build_additive_exp left_factor toks = (mk_build_exp parse_term [Tok.Plus; Tok.Minus]) left_factor toks
+and parse_shift_exp toks = parse_bin_exp parse_additive_exp [Tok.ShiftLeft; Tok.ShiftRight] toks
 
-and parse_additive_exp toks = (mk_parse_exp parse_term build_additive_exp) toks
+and parse_relational_exp toks = parse_bin_exp parse_shift_exp [Tok.Lt; Tok.Le; Tok.Gt; Tok.Ge] toks
 
-and build_shift_exp left_factor toks = (mk_build_exp parse_additive_exp [Tok.ShiftLeft; Tok.ShiftRight]) left_factor toks
+and parse_equality_exp toks = parse_bin_exp parse_relational_exp [Tok.DoubleEq; Tok.Neq] toks
 
-and parse_shift_exp toks = (mk_parse_exp parse_additive_exp build_shift_exp) toks
+and parse_bitwise_and_exp toks = parse_bin_exp parse_equality_exp [Tok.BitAnd] toks
 
-and build_relational_exp left_factor toks = (mk_build_exp parse_shift_exp [Tok.Lt; Tok.Le; Tok.Gt; Tok.Ge]) left_factor toks
+and parse_xor_exp toks = parse_bin_exp parse_bitwise_and_exp [Tok.Xor] toks
 
-and parse_relational_exp toks = (mk_parse_exp parse_shift_exp build_relational_exp) toks
+and parse_bitwise_or_exp toks = parse_bin_exp parse_xor_exp [Tok.BitOr] toks
 
-and build_equality_exp left_exp toks = (mk_build_exp parse_relational_exp [Tok.DoubleEq; Tok.Neq]) left_exp toks
+and parse_and_exp toks = parse_bin_exp parse_bitwise_or_exp [Tok.And] toks
 
-and parse_equality_exp toks = (mk_parse_exp parse_relational_exp build_equality_exp) toks
-
-and build_bitwise_and_exp left_exp toks = (mk_build_exp parse_equality_exp [Tok.BitAnd]) left_exp toks
-
-and parse_bitwise_and_exp toks = (mk_parse_exp parse_equality_exp build_bitwise_and_exp) toks
-
-and build_xor_exp left_exp toks = (mk_build_exp parse_bitwise_and_exp [Tok.Xor]) left_exp toks
-
-and parse_xor_exp toks = (mk_parse_exp parse_bitwise_and_exp build_xor_exp) toks
-
-and build_bitwise_or_exp left_exp toks = (mk_build_exp parse_xor_exp [Tok.BitOr]) left_exp toks
-
-and parse_bitwise_or_exp toks = (mk_parse_exp parse_xor_exp build_bitwise_or_exp) toks
-
-and build_and_exp left_exp toks = (mk_build_exp parse_bitwise_or_exp [Tok.And]) left_exp toks
-
-and parse_and_exp toks = (mk_parse_exp parse_bitwise_or_exp build_and_exp) toks
-
-and build_exp left_exp toks = (mk_build_exp parse_and_exp [Tok.Or]) left_exp toks
-
-and parse_exp toks = (mk_parse_exp parse_and_exp build_exp) toks
+and parse_exp toks = parse_bin_exp parse_and_exp [Tok.Or] toks
 
 let parse_declaration var_type tokens =
     match tokens with
