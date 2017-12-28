@@ -10,7 +10,7 @@ let generate filename prog =
     let _ = Printf.fprintf chan "    .globl _main\n" in
 
     let emit_comparison set_instruction =
-        Printf.fprintf chan "    cmp %%eax, %%ecx\n";
+        Printf.fprintf chan "    cmp %%ecx, %%eax\n";
         Printf.fprintf chan "    movl $0, %%eax\n";
         Printf.fprintf chan "    %s %%al\n" set_instruction in
 
@@ -57,15 +57,14 @@ let generate filename prog =
                 Printf.fprintf chan "    movl $0, %%eax\n";
                 Printf.fprintf chan "    setne %%al\n"
             | Ast.And ->
-                (* if eax != 0, set eax = 1 *)
+                (* if eax != 0, set al = 1 *)
                 Printf.fprintf chan "    cmp $0, %%eax\n";
-                Printf.fprintf chan "    movl $0, %%eax\n";
+                Printf.fprintf chan "    movl $0, %%eax\n"; (* zero this b/c we'll store result in it*)
                 Printf.fprintf chan "    setne %%al\n";
-                (* if ecx != 0, set ecx = 1 *)
+                (* if ecx != 0, set cl = 1 *)
                 Printf.fprintf chan "    cmp $0, %%ecx\n";
-                Printf.fprintf chan "    movl $0, %%ecx\n";
                 Printf.fprintf chan "    setne %%cl\n";
-                (* eax = eax && ecx *)
+                (* eax = al && cl *)
                 Printf.fprintf chan "    andb %%cl, %%al\n")
         | Ast.UnOp(op, e) ->
             generate_exp e var_map;
