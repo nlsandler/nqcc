@@ -166,7 +166,7 @@ let parse_declaration var_type tokens =
             init = init;
         }
         in
-        Ast.Decl(declaration), rest
+        declaration, rest
     | _ -> failwith("Invalid variable declaration")
 
 let parse_return_statement = function
@@ -190,6 +190,36 @@ let rec parse_if_statement = function
     | Tok.IfKeyword::_ -> failwith("Expected '(' after 'if'")
     | _ -> failwith("PANIC: parse_if_statement called on non-if statement")
 
+and parse_for_components toks =
+    let cond, rest =
+        match toks with
+        | Tok.Semicolon::next_toks -> parse_exp next_toks
+        | _ -> failwith "Expected semicolon in for loop"
+    in
+    let post, rest =
+        match rest with
+        | Tok.Semicolon::next_toks -> parse_exp next_toks
+        | _ -> failwith "Expected semicolon in for loop"
+    in
+    let body, rest =
+        match rest with
+        | Tok.CloseParen::body_toks -> parse_statement_block body_toks
+        | _ -> failwith "Expected closing paren in for loop"
+    in
+    cond, post, body, rest
+
+and parse_for_statement = function
+    | Tok.ForKeyword::Tok.OpenParen::Tok.IntKeyword::toks ->
+        (* for loop w/ variable declaration *)
+        let init, rest = parse_declaration Ast.IntType toks in
+        let cond, post, body, rest = parse_for_components rest in
+        Ast.ForDecl { init; cond; post; body }, rest
+    | Tok.ForKeyword::Tok.OpenParen::toks ->
+        let init, rest = parse_exp toks in
+        let cond, post, body, rest = parse_for_components rest in
+        Ast.For { init; cond; post; body }, rest
+    | _ -> failwith("PANIC: not a valid for loop")
+
 and parse_statement_or_block tokens =
     if (List.hd tokens) == Tok.OpenBrace
     then parse_statement_block tokens
@@ -209,15 +239,24 @@ and parse_statement_block = function
 and parse_statement tokens =
     let stmt, rest =
         (match tokens with
-        | Tok.IntKeyword::rest -> parse_declaration Ast.IntType rest
-        | Tok.CharKeyword::rest -> parse_declaration Ast.CharType rest
+        | Tok.IntKeyword::rest -> 
+            let decl, rest = parse_declaration Ast.IntType rest in
+            (Ast.Decl decl), rest
+        | Tok.CharKeyword::rest -> 
+            let decl, rest = parse_declaration Ast.CharType rest in
+            (Ast.Decl decl), rest
         | Tok.IfKeyword::rest -> parse_if_statement tokens
+        | Tok.ForKeyword::rest -> parse_for_statement tokens
         | Tok.ReturnKeyword::rest -> parse_return_statement tokens
         | _ -> 
             let exp, rest = parse_exp tokens in
             Ast.Exp(exp), rest) in
     match stmt, rest with
-    | Ast.If(_), _ -> stmt, rest (* no semicolon after if *)
+    (* statement blocks have no semicolons after them *)
+    | Ast.If _, _ -> stmt, rest
+    | Ast.For _, _ -> stmt, rest
+    | Ast.ForDecl _, _ -> stmt, rest
+    (* expressions & declarations do *)
     | _, Tok.Semicolon::rest -> stmt, rest (* eat semicolon from end of statement *)
     | _ -> failwith("Expected semicolon at end of statement") 
 

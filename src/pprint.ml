@@ -80,6 +80,17 @@ let rec pprint_stmt = function
             Printf.printf "\t\t}\n"
         | None -> Printf.printf "\t\t}\n"
         end
+    | Ast.(For { init; cond; post; body }) ->
+        Printf.printf "\t\tFOR (%s ; %s ; %s) {\n"
+            (exp_to_string init) (exp_to_string cond) (exp_to_string post);
+        List.iter pprint_stmt body;
+        Printf.printf"\t\t}\n"
+    | Ast.(ForDecl { init; cond; post; body }) ->
+        Printf.printf "\t\tFOR ( ";
+        pprint_decl init;
+        Printf.printf " ; %s ; %s ) {\n" (exp_to_string cond) (exp_to_string post);
+        List.iter pprint_stmt body;
+        Printf.printf"\t\t}\n";   
     | Ast.Exp(e) -> Printf.printf "%s" (exp_to_string e) 
 
 let pprint_function_body (Ast.Body(stmts)) =

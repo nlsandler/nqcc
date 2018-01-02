@@ -45,6 +45,14 @@ let rec compare_statements expected actual =
         | Some body1, Some body2 -> List.for_all2 compare_statements body1 body2
         | None, None -> true
         | _ -> false)
+    | Ast.(For { init = init1; cond = cond1; post = post1; body = body1; },
+        For { init = init2; cond = cond2; post = post2; body = body2; }) ->
+        compare_exps init1 init2 && compare_exps cond1 cond2 && 
+        compare_exps post1 post2 && List.for_all2 compare_statements body1 body2
+    | Ast.(ForDecl { init = init1; cond = cond1; post = post1; body = body1; },
+        ForDecl { init = init2; cond = cond2; post = post2; body = body2; }) ->
+        compare_declarations init1 init2 && compare_exps cond1 cond2 && 
+        compare_exps post1 post2 && List.for_all2 compare_statements body1 body2
     | Ast.Exp(e1), Ast.Exp(e2) -> compare_exps e1 e2
     | _ -> false
 
@@ -395,6 +403,41 @@ let conditional_parse_tests = [
     "test_single_if_else" >:: test_compare_asts single_if_else_tokens single_if_else_ast;
 ]
 
+(* FOR LOOPS *)
+
+let for_tokens = Lex.lex "int main() {for(1; 1; 1) { 1;}}"
+let for_ast =
+    let const = Ast.Const(Ast.Int(1)) in
+    let for_loop = Ast.For { init=const; cond=const; post=const; body=[Ast.Exp const] } in
+    make_ast [] [for_loop]
+
+let for_compound_tokens = Lex.lex "int main() {int a; for(a=0; a<5; a=a+1){ 1+1; if(a<5) {return 3;} } }"
+let for_compound_ast =
+    let open Ast in
+    let decl = Decl { var_type = IntType; var_name = ID("a"); init = None } in
+    let init = Assign(Equals, ID("a"), Const(Int 0)) in
+    let post = Assign(Equals, ID("a"), BinOp(Add, Var(ID "a"), Const (Int 1))) in
+    let cond = BinOp(Lt, Var(ID("a")), Const(Int 5)) in
+    let exp = Exp(BinOp(Add, Const(Int 1), Const(Int 1))) in
+    let return = ReturnVal(Const(Int 3)) in
+    let if_statement = If(cond, [return], None) in
+    let body = [exp; if_statement] in
+    let for_loop = For { init; cond; post; body } in
+    make_ast [] [decl; for_loop]
+
+let for_declaration_tokens = Lex.lex "int main() {for(int a; 1; 1) { 1;}}"
+let for_decl_ast =
+    let const = Ast.Const(Ast.Int(1)) in
+    let decl = Ast.({ var_type = IntType; var_name = ID("a"); init = None}) in
+    let for_loop = Ast.ForDecl { init=decl; cond=const; post=const; body=[Ast.Exp const] } in
+    make_ast [] [for_loop]
+
+let for_parse_tests = [
+    "test_for" >:: test_compare_asts for_tokens for_ast;
+    "test_for_compound" >:: test_compare_asts for_compound_tokens for_compound_ast;
+    "test_for_declaration" >:: test_compare_asts for_declaration_tokens for_decl_ast;
+]
+
 (* FUNCTION CALLS *)
 let fun_tokens = Lex.lex "int main() { return foo(); }" (* note: call to undefined function should fail during code generation, not parsing *)
 let fun_ast =
@@ -444,4 +487,5 @@ let failure_parse_tests = [
 (* TODO: add comp parse test *)
 let parse_tests = basic_parse_tests@unop_parse_tests@binop_parse_tests@boolean_binop_tests
                 @bitwise_binops_tests@comp_parse_tests@variable_parse_tests
-                @conditional_parse_tests@fun_call_parse_tests@failure_parse_tests
+                @conditional_parse_tests@fun_call_parse_tests@for_parse_tests
+                @failure_parse_tests

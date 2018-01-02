@@ -120,7 +120,10 @@ let generate filename prog =
         match statement with
         (* for return statements, variable map/stack index unchanged *)
         | Ast.Decl(declaration) -> generate_declaration declaration var_map stack_index
+        | Ast.For _  -> generate_for_loop statement var_map stack_index
+        | Ast.ForDecl _  -> generate_for_decl_loop statement var_map stack_index       
         | Ast.If(cond, body, else_body) ->
+            (* TODO refactor this into own function *)
             (* evaluate condition *)
             let _ = generate_exp cond var_map in
             let post_if_label = Util.unique_id "post_if" in
@@ -156,6 +159,70 @@ let generate filename prog =
                 Printf.fprintf chan "    ret\n"; 
                 var_map, stack_index
             end
+
+
+(*
+    for (i = 0; i < 5; i = i + 1) {
+        statements
+    }
+
+    mov 0, i
+_loop:
+    cmp i 5
+    jmp if false to _post_loop
+    do statements
+    do i = i + 1
+    jmp _loop
+_post_loop:
+    ...    
+
+*)
+    and generate_for_loop Ast.(For { init ; cond ; post ; body }) var_map stack_index =
+        let loop_label = Util.unique_id "loop" in
+        let post_loop_label = Util.unique_id "post_loop" in
+        begin
+            (* evaluate init expression *)
+            generate_exp init var_map;
+            Printf.fprintf chan "%s:\n" loop_label;
+            generate_exp cond var_map;
+            (* jump after loop if cond is false *)
+            Printf.fprintf chan "    cmp $0, %%eax\n";
+            Printf.fprintf chan "    je %s\n" post_loop_label;
+            (* evaluate loop body *)
+            generate_statement_list body var_map stack_index;
+            (* evaluate post expression *)
+            generate_exp post var_map;
+            (* execute loop again *)
+            Printf.fprintf chan "    jmp %s\n" loop_label;
+            (* label end of loop *)
+            Printf.fprintf chan "%s:\n" post_loop_label;
+            var_map, stack_index
+        end
+
+    (* TODO: refactor for_loop functions, they're almost identical *)
+    and generate_for_decl_loop Ast.(ForDecl { init ; cond ; post ; body }) var_map stack_index =
+        let loop_label = Util.unique_id "loop" in
+        let post_loop_label = Util.unique_id "post_loop" in
+        (* add variable to scope *)
+        let var_map', stack_index' = generate_declaration init var_map stack_index in
+        begin
+            Printf.fprintf chan "%s:\n" loop_label;
+            generate_exp cond var_map';
+            (* jump after loop if cond is false *)
+            Printf.fprintf chan "    cmp $0, %%eax\n";
+            Printf.fprintf chan "    je %s\n" post_loop_label;
+            (* evaluate loop body *)
+            generate_statement_list body var_map' stack_index';
+            (* evaluate post expression *)
+            generate_exp post var_map';
+            (* execute loop again *)
+            Printf.fprintf chan "    jmp %s\n" loop_label;
+            (* label end of loop *)
+            Printf.fprintf chan "%s:\n" post_loop_label;
+            (* return original var_map; 
+             * variable declared in init goes out of scope after for loop *)
+            var_map, stack_index
+        end    
 
     and generate_statement_list statements var_map stack_index =
         match statements with
