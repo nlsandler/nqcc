@@ -159,7 +159,14 @@ let parse_declaration var_type tokens =
                 let exp, rest = parse_exp rest in
                 Some(exp), rest
             | _ -> failwith("Invalid initial value for variable")
-        in Ast.DeclareVar(var_type, var_id, init), rest
+        in 
+        let declaration = Ast.{
+            var_type = var_type;
+            var_name = var_id;
+            init = init;
+        }
+        in
+        Ast.Decl(declaration), rest
     | _ -> failwith("Invalid variable declaration")
 
 let parse_return_statement = function

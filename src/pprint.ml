@@ -62,11 +62,13 @@ and args_to_string args =
     let arg_strings = List.map exp_to_string args in
     String.concat ", " arg_strings
 
+let pprint_decl Ast.{ var_type; var_name=ID(id); init } =
+    match init with
+    | None -> Printf.printf "\t\t%s %s\n" (type_to_string var_type) id
+    | Some e -> Printf.printf "\t\t%s %s = %s\n" (type_to_string var_type) id (exp_to_string e)
+
 let rec pprint_stmt = function
-    | Ast.DeclareVar(var_type, Ast.ID(var_name), rhs) ->
-        (match rhs with
-        | None -> Printf.printf "\t\t%s %s\n" (type_to_string var_type) var_name
-        | Some e -> Printf.printf "\t\t%s %s = %s\n" (type_to_string var_type) var_name (exp_to_string e))
+    | Ast.Decl(decl) -> pprint_decl decl
     | Ast.ReturnVal(e) -> Printf.printf "\t\tRETURN %s\n" (exp_to_string e)
     | Ast.If(cond, then_body, else_body) ->
         Printf.printf "\t\tIF (%s) {\n" (exp_to_string cond);

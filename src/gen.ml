@@ -105,18 +105,21 @@ let generate filename prog =
         List.iter push_arg (List.rev args)
     in
 
+    let generate_declaration Ast.{ var_type; init; var_name=Ast.ID(id); } var_map stack_index =
+        let _ = match init with
+            | Some exp -> generate_exp exp var_map
+            | None -> () in
+        (* push value of var onto stack *)
+        let _ = Printf.fprintf chan "    push %%eax\n" in
+        let var_map = Map.add id stack_index var_map in
+        let stack_index = stack_index - 4 in
+        var_map, stack_index
+    in
+
     let rec generate_statement statement var_map stack_index =
         match statement with
         (* for return statements, variable map/stack index unchanged *)
-        | Ast.DeclareVar(t, Ast.ID(varname), rhs) ->
-            let _ = match rhs with
-                | Some exp -> generate_exp exp var_map
-                | None -> () in
-            (* push value of var onto stack *)
-            let _ = Printf.fprintf chan "    push %%eax\n" in
-            let var_map = Map.add varname stack_index var_map in
-            let stack_index = stack_index - 4 in
-            var_map, stack_index
+        | Ast.Decl(declaration) -> generate_declaration declaration var_map stack_index
         | Ast.If(cond, body, else_body) ->
             (* evaluate condition *)
             let _ = generate_exp cond var_map in

@@ -26,14 +26,18 @@ let rec compare_exps expected actual =
         (expected_op == actual_op) && compare_ids expected_id actual_id && compare_exps expected_exp actual_exp
     | _ -> false
 
+let compare_declarations 
+    Ast.{ var_type = t1; var_name = id1; init = init1; }
+    Ast.{ var_type = t2; var_name = id2; init = init2; } =
+    t1 == t2 && compare_ids id1 id2 &&
+        (match init1, init2 with
+        | None, None -> true
+        | Some e1, Some e2 -> compare_exps e1 e2
+        | _ -> false)
+
 let rec compare_statements expected actual = 
     match expected, actual with
-    | Ast.DeclareVar(t1, id1, rhs1), Ast.DeclareVar(t2, id2, rhs2) ->
-        t1 == t2 && compare_ids id1 id2 && 
-            (match rhs1, rhs2 with
-            | None, None -> true
-            | Some e1, Some e2 -> compare_exps e1 e2
-            | _ -> false)
+    | Ast.Decl(decl1), Ast.Decl(decl2) -> compare_declarations decl1 decl2
     | Ast.ReturnVal(v1), Ast.ReturnVal(v2) -> compare_exps v1 v2
     | Ast.If(cond1, then1, else1), Ast.If(cond2, then2, else2) ->
         compare_exps cond1 cond2 && List.for_all2 compare_statements then1 then2 &&
@@ -342,14 +346,22 @@ let comp_parse_tests = [
 
 let declaration_tokens = Lex.lex "int main(){int a=2; return a;}"
 let declaration_ast =
-    let decl = Ast.DeclareVar(Ast.IntType, Ast.ID("a"), Some(Ast.Const(Ast.Int(2)))) in
+    let decl = Ast.(Decl { var_type = IntType;
+                           var_name = Ast.ID("a");
+                           init = Some(Const(Int 2));
+                          })
+    in
     let ret = Ast.ReturnVal(Ast.Var(Ast.ID("a"))) in
     let statements = [decl; ret] in
     make_ast [] statements
 
 let assignment_tokens = Lex.lex "int main(){int a; a=2; return 0;}"
 let assignment_ast =
-    let decl = Ast.DeclareVar(Ast.IntType, Ast.ID("a"), None) in
+    let decl = Ast.(Decl { var_type = IntType;
+                           var_name = Ast.ID("a");
+                           init = None;
+        }) 
+    in
     let assign = Ast.Exp(Ast.Assign(Ast.Equals, Ast.ID("a"), Ast.Const(Ast.Int(2)))) in
     let ret = Ast.ReturnVal(Ast.Const(Ast.Int(0))) in
     let statements = [decl; assign; ret] in

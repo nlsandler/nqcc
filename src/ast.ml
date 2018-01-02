@@ -36,10 +36,17 @@ type exp =
     | BinOp of binop * exp * exp
     | Assign of assign_op * id * exp
     | FunCall of id * exp list
+type declaration = 
+    { var_type: type_def; 
+      var_name: id; 
+      init: exp option;
+    }
 type statement =
-    | DeclareVar of type_def * id * exp option (* optional initial value *)
+    | Decl of declaration
     | If of exp * statement list * statement list option (* condition, if body, optional else body *)
     | Exp of exp
+    | For of {init: exp; cond: exp; post: exp; body: statement list}
+    | ForDecl of {init: declaration; cond: exp; post: exp; body: statement list}
     | ReturnVal of exp (* should we add a return_exp instead? *)
 type fun_param = Param of type_def * id
 type fun_body = Body of statement list
