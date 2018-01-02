@@ -11,6 +11,9 @@ type token =
     | ReturnKeyword
     | IfKeyword
     | ElseKeyword
+    | ForKeyword
+    | DoKeyword
+    | WhileKeyword
     | Bang
     | Complement
     | Plus

@@ -46,12 +46,17 @@ let unop_to_string = function
     | Ast.Complement -> "~"
     | Ast.Not -> "!"
 
+let assign_op_to_string = function
+    | Ast.Equals -> "="
+
 let rec exp_to_string = function
     | Ast.Var(Ast.ID v) -> Printf.sprintf "VAR<%s>" v
     | Ast.Const c -> const_to_string c
     | Ast.BinOp(op, e1, e2) -> Printf.sprintf "(%s %s %s)" (exp_to_string e1) (op_to_string op) (exp_to_string e2)
     | Ast.UnOp(op, e) -> Printf.sprintf "(%s %s)" (unop_to_string op) (exp_to_string e)
     | Ast.FunCall(fun_id, args) -> Printf.sprintf "%s(%s)" (id_to_string fun_id) (args_to_string args)
+    | Ast.Assign(op, Ast.ID(var_name), rhs) ->
+        Printf.sprintf "\t\t%s %s %s\n" var_name (assign_op_to_string op) (exp_to_string rhs)
 
 and args_to_string args =
     let arg_strings = List.map exp_to_string args in
@@ -62,8 +67,6 @@ let rec pprint_stmt = function
         (match rhs with
         | None -> Printf.printf "\t\t%s %s\n" (type_to_string var_type) var_name
         | Some e -> Printf.printf "\t\t%s %s = %s\n" (type_to_string var_type) var_name (exp_to_string e))
-    | Ast.Assign(Ast.ID(var_name), rhs) ->
-        Printf.printf "\t\t%s = %s\n" var_name (exp_to_string rhs)
     | Ast.ReturnVal(e) -> Printf.printf "\t\tRETURN %s\n" (exp_to_string e)
     | Ast.If(cond, then_body, else_body) ->
         Printf.printf "\t\tIF (%s) {\n" (exp_to_string cond);

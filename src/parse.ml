@@ -137,7 +137,16 @@ and parse_bitwise_or_exp toks = parse_bin_exp parse_xor_exp [Tok.BitOr] toks
 
 and parse_and_exp toks = parse_bin_exp parse_bitwise_or_exp [Tok.And] toks
 
-and parse_exp toks = parse_bin_exp parse_and_exp [Tok.Or] toks
+and parse_or_exp toks = parse_bin_exp parse_and_exp [Tok.Or] toks
+
+and parse_exp tokens =
+    match tokens with
+    | Tok.Id(v)::Tok.Eq::rest ->
+        (* assignment statement *)
+        let var_id = Ast.ID(v) in
+        let exp, rest = parse_or_exp rest in
+        Ast.Assign(Ast.Equals, var_id, exp), rest
+    | _ -> parse_or_exp tokens
 
 let parse_declaration var_type tokens =
     match tokens with
@@ -152,12 +161,6 @@ let parse_declaration var_type tokens =
             | _ -> failwith("Invalid initial value for variable")
         in Ast.DeclareVar(var_type, var_id, init), rest
     | _ -> failwith("Invalid variable declaration")
-
-let parse_assignment = function
-    | Tok.Id(varname)::Tok.Eq::rest ->
-        let exp, rest = parse_exp rest in
-        Ast.Assign(Ast.ID(varname), exp), rest
-    | _ -> failwith("Invalid assignment statement")
 
 let parse_return_statement = function
     | Tok.ReturnKeyword::rest ->
@@ -202,7 +205,6 @@ and parse_statement tokens =
         | Tok.IntKeyword::rest -> parse_declaration Ast.IntType rest
         | Tok.CharKeyword::rest -> parse_declaration Ast.CharType rest
         | Tok.IfKeyword::rest -> parse_if_statement tokens
-        | Tok.Id(v)::Tok.Eq::rest -> parse_assignment tokens
         | Tok.ReturnKeyword::rest -> parse_return_statement tokens
         | _ -> 
             let exp, rest = parse_exp tokens in

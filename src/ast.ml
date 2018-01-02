@@ -25,6 +25,8 @@ type binop =
     | Xor
     | ShiftL
     | ShiftR
+type assign_op =
+    | Equals (* = *)
 type unop = Negate | Pos | Complement | Not
 type id = ID of string
 type exp = 
@@ -32,10 +34,10 @@ type exp =
     | Var of id
     | UnOp of unop * exp
     | BinOp of binop * exp * exp
+    | Assign of assign_op * id * exp
     | FunCall of id * exp list
-type statement = 
+type statement =
     | DeclareVar of type_def * id * exp option (* optional initial value *)
-    | Assign of id * exp
     | If of exp * statement list * statement list option (* condition, if body, optional else body *)
     | Exp of exp
     | ReturnVal of exp (* should we add a return_exp instead? *)

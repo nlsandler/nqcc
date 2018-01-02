@@ -45,7 +45,10 @@ let lex_keyword_tests = [
     "test_lex_char_keyword" >:: test_lex_single "char" (Tok.CharKeyword);
     "test_lex_int_keyword" >:: test_lex_single "int" (Tok.IntKeyword);
     "test_lex_if_keyword" >:: test_lex_single "if" (Tok.IfKeyword);
-    "test_lex_else_keyword" >:: test_lex_single "else" (Tok.ElseKeyword)
+    "test_lex_else_keyword" >:: test_lex_single "else" (Tok.ElseKeyword);
+    "test_lex_for_keyword" >:: test_lex_single "for" (Tok.ForKeyword);
+    "test_lex_while_keyword" >:: test_lex_single "while" (Tok.WhileKeyword);
+    "test_lex_do_keyword" >:: test_lex_single "do" (Tok.DoKeyword);
 ]
 
 let lex_punctuation_tests = [

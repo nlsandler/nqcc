@@ -17,6 +17,12 @@ let generate filename prog =
     (* generate code to execute expression and move result into eax *)
     let rec generate_exp exp var_map =
         match exp with
+        | Ast.Assign(Ast.Equals, (Ast.ID id), exp) ->
+            let _ = generate_exp exp var_map in
+            (* get location of variable on stack *)
+            let var_index = Map.find id var_map in
+            (* move value  of eax to that variable *)
+            Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
         | Ast.BinOp(op, e1, e2) ->
             let _ = generate_exp e1 var_map in
             let _ = Printf.fprintf chan "    push %%eax\n"  in
@@ -27,7 +33,7 @@ let generate filename prog =
                     (* Put e1 in eax (where it needs to be for idiv) *)
                     Printf.fprintf chan "    pop %%eax\n";
                 end in
-            (match op with 
+            (match op with               
             | Ast.Div ->                        
                     (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
                     Printf.fprintf chan "    xor %%edx, %%edx\n";
@@ -110,14 +116,6 @@ let generate filename prog =
             let _ = Printf.fprintf chan "    push %%eax\n" in
             let var_map = Map.add varname stack_index var_map in
             let stack_index = stack_index - 4 in
-            var_map, stack_index
-        | Ast.Assign(Ast.ID(id), exp) ->
-            let _ = generate_exp exp var_map in
-            (* get location of variable on stack *)
-            let var_index = Map.find id var_map in
-            (* move value  of eax to that variable *)
-            Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index;
-            (* var_map, stack_index stay the same *)
             var_map, stack_index
         | Ast.If(cond, body, else_body) ->
             (* evaluate condition *)
