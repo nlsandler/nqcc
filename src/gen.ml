@@ -125,23 +125,32 @@ let generate filename prog =
         List.iter push_arg (List.rev args)
     in
 
-    let generate_declaration Ast.{ var_type; init; var_name=Ast.ID(id); } var_map stack_index =
-        let _ = match init with
-            | Some exp -> generate_exp exp var_map
-            | None -> () in
-        (* push value of var onto stack *)
-        let _ = Printf.fprintf chan "    push %%eax\n" in
-        let var_map = Map.add id stack_index var_map in
-        let stack_index = stack_index - 4 in
-        var_map, stack_index
+    let generate_declaration Ast.{ var_type; init; var_name=Ast.ID(id); } var_map current_scope stack_index =
+        if Set.mem id current_scope
+        then handle_error (Printf.sprintf "Variable %s declared twice in same scope" id)
+        else
+            let _ = match init with
+                | Some exp -> generate_exp exp var_map
+                | None -> () in
+            (* push value of var onto stack *)
+            let _ = Printf.fprintf chan "    push %%eax\n" in
+            let var_map = Map.add id stack_index var_map in
+            let new_scope = Set.add id current_scope in
+            let stack_index = stack_index - 4 in
+            var_map, new_scope, stack_index
     in
 
-    let rec generate_statement statement var_map stack_index =
+    let rec generate_statement statement var_map current_scope stack_index =
         match statement with
-        (* for return statements, variable map/stack index unchanged *)
-        | Ast.Decl(declaration) -> generate_declaration declaration var_map stack_index
-        | Ast.For _  -> generate_for_loop statement var_map stack_index
-        | Ast.ForDecl _  -> generate_for_decl_loop statement var_map stack_index       
+        | Ast.Decl(declaration) -> generate_declaration declaration var_map current_scope stack_index
+        | Ast.For _  -> begin
+            generate_for_loop statement var_map stack_index; 
+            var_map, current_scope, stack_index
+        end
+        | Ast.ForDecl _  -> begin
+            generate_for_decl_loop statement var_map stack_index;
+            var_map, current_scope, stack_index
+        end
         | Ast.If(cond, body, else_body) ->
             (* TODO refactor this into own function *)
             (* evaluate condition *)
@@ -153,7 +162,7 @@ let generate filename prog =
                 (* if cond is false, jump over if body *)
                 Printf.fprintf chan "    je      %s\n" post_if_label;
                 (* generate if body *)
-                generate_statement_list body var_map stack_index in
+                generate_statement_list body var_map Set.empty stack_index in
             (match else_body with
             | Some else_statements -> 
                 let post_else_label = Util.unique_id "post_else" in
@@ -162,19 +171,20 @@ let generate filename prog =
                 (* now print out label after if statement *)
                 Printf.fprintf chan "%s:\n" post_if_label;
                 (* now generate else statement *)
-                generate_statement_list else_statements var_map stack_index;
+                generate_statement_list else_statements var_map Set.empty stack_index;
                 (* now print post-else label *)
                 Printf.fprintf chan "%s:" post_else_label;
-                var_map, stack_index
+                var_map, current_scope, stack_index
             | None ->
                 (* print out label that comes after if statement *)
                 Printf.fprintf chan "%s:\n" post_if_label; 
-                var_map, stack_index)
-        | Ast.Exp(e) -> generate_exp e var_map; var_map, stack_index
+                var_map, current_scope, stack_index)
+        | Ast.Exp(e) -> generate_exp e var_map; var_map, current_scope, stack_index
+        (* for return statements, variable map/stack index unchanged *)
         | Ast.ReturnVal exp -> 
             let _ = generate_exp exp var_map in
             let _ = emit_function_epilogue () in
-            var_map, stack_index
+            var_map, current_scope, stack_index
 
 (*
     for (i = 0; i < 5; i = i + 1) {
@@ -203,47 +213,43 @@ _post_loop:
             (* jump after loop if cond is false *)
             Printf.fprintf chan "    cmp $0, %%eax\n";
             Printf.fprintf chan "    je %s\n" post_loop_label;
-            (* evaluate loop body *)
-            generate_statement_list body var_map stack_index;
+            (* evaluate loop body - new scope, so current_scope set is empty *)
+            generate_statement_list body var_map Set.empty stack_index;
             (* evaluate post expression *)
             generate_exp post var_map;
             (* execute loop again *)
             Printf.fprintf chan "    jmp %s\n" loop_label;
             (* label end of loop *)
-            Printf.fprintf chan "%s:\n" post_loop_label;
-            var_map, stack_index
+            Printf.fprintf chan "%s:\n" post_loop_label
         end
 
     (* TODO: refactor for_loop functions, they're almost identical *)
     and generate_for_decl_loop Ast.(ForDecl { init ; cond ; post ; body }) var_map stack_index =
         let loop_label = Util.unique_id "loop" in
         let post_loop_label = Util.unique_id "post_loop" in
-        (* add variable to scope *)
-        let var_map', stack_index' = generate_declaration init var_map stack_index in
+        (* add variable - for loop is new scope*)
+        let var_map', _, stack_index' = generate_declaration init var_map Set.empty stack_index in
         begin
             Printf.fprintf chan "%s:\n" loop_label;
             generate_exp cond var_map';
             (* jump after loop if cond is false *)
             Printf.fprintf chan "    cmp $0, %%eax\n";
             Printf.fprintf chan "    je %s\n" post_loop_label;
-            (* evaluate loop body *)
-            generate_statement_list body var_map' stack_index';
+            (* evaluate loop body, which is a new scope *)
+            generate_statement_list body var_map' Set.empty stack_index';
             (* evaluate post expression *)
             generate_exp post var_map';
             (* execute loop again *)
             Printf.fprintf chan "    jmp %s\n" loop_label;
             (* label end of loop *)
-            Printf.fprintf chan "%s:\n" post_loop_label;
-            (* return original var_map; 
-             * variable declared in init goes out of scope after for loop *)
-            var_map, stack_index
+            Printf.fprintf chan "%s:\n" post_loop_label
         end    
 
-    and generate_statement_list statements var_map stack_index =
+    and generate_statement_list statements var_map current_scope stack_index =
         match statements with
         | stmt::stmts ->
-            let var_map, stack_index = generate_statement stmt var_map stack_index in
-            generate_statement_list stmts var_map stack_index
+            let var_map', current_scope', stack_index' = generate_statement stmt var_map current_scope stack_index in
+            generate_statement_list stmts var_map' current_scope' stack_index'
         | [] -> () in
 
     let generate_fun f = 
@@ -259,7 +265,7 @@ _post_loop:
                 reverse fun_params b/c they go on stack right to left
             *)
             let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si + 4)) (Map.empty, 8) (List.rev fun_params) in
-            let _ = generate_statement_list statements var_map (-4) in (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
+            let _ = generate_statement_list statements var_map Set.empty (-4) in (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
             (* generate function epilogue and ret, so function returns even if missing return statement *)
             emit_function_epilogue ()
             in         
