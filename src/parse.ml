@@ -144,7 +144,7 @@ and parse_exp tokens =
     | Tok.Id(v)::Tok.Eq::rest ->
         (* assignment statement *)
         let var_id = Ast.ID(v) in
-        let exp, rest = parse_or_exp rest in
+        let exp, rest = parse_exp rest in
         Ast.Assign(Ast.Equals, var_id, exp), rest
     | _ -> parse_or_exp tokens
 

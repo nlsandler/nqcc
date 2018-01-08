@@ -1,11 +1,6 @@
 for i in examples/*/*.c
-do
-    if [[ $i == *"cmps"* ]]; then
-        # ignore cmps for now, not yet implemented
-        continue
-    fi
-    
-    gcc -m32 $i             #compile with gcc
+do  
+    gcc -w -m32 $i             #compile with gcc
     ./a.out                 #run it
     expected=$?             #get exit code
     ./nqcc $i              #compile with nqcc

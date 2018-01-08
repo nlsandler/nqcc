@@ -1,6 +1,9 @@
 #!/bin/bash
 
 `dirname $0`/nqcc.byte $1 #compile to assembly
+if [[ $? != 0 ]]; then
+    exit 1
+fi
 base="${1%.*}"
 assembly=$base".s"
 gcc -m32 $assembly -o $base

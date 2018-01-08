@@ -375,9 +375,26 @@ let assignment_ast =
     let statements = [decl; assign; ret] in
     make_ast [] statements 
 
+let multi_assign_tokens = Lex.lex "int main(){int a; int b = a = 2; return b;}"
+let multi_assign_ast =
+    let decl_1 = Ast.(Decl { var_type = IntType;
+                             var_name = Ast.ID("a");
+                             init = None
+                         }) in
+    let assign = Ast.Assign(Ast.Equals, Ast.ID("a"), Ast.Const(Ast.Int(2))) in
+    let decl_2 = Ast.(Decl { var_type = IntType;
+                             var_name = Ast.ID("b");
+                             init = Some(assign)
+                         }) in
+    let ret = Ast.ReturnVal(Ast.Var(Ast.ID("b"))) in
+    let statements = [decl_1; decl_2; ret] in
+    make_ast [] statements
+
+
 let variable_parse_tests = [
     "test_declaration" >:: test_compare_asts declaration_tokens declaration_ast;
     "test_assignment" >:: test_compare_asts assignment_tokens assignment_ast;
+    "test_multi_assign" >:: test_compare_asts multi_assign_tokens multi_assign_ast;
 ]
 
 (* CONDITIONALS *)

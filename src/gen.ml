@@ -6,6 +6,19 @@ let generate filename prog =
     let filename_asm = String.splice filename (-1) 1 "s" in
     let chan = open_out filename_asm in
 
+    let handle_error message = begin
+        Printf.printf "ERROR: %s\n" message;
+        close_out chan;
+        Sys.remove filename_asm;
+        exit 1;
+    end in
+
+    let safe_map_lookup var var_map =
+    try
+        Map.find var var_map
+    with
+    | Not_found -> handle_error (Printf.sprintf "undeclared variable %s" var) in
+
     (* main is always entry point *)
     let _ = Printf.fprintf chan "    .globl _main\n" in
 
@@ -14,13 +27,20 @@ let generate filename prog =
         Printf.fprintf chan "    movl $0, %%eax\n";
         Printf.fprintf chan "    %s %%al\n" set_instruction in
 
+    let emit_function_epilogue () =
+    begin
+        Printf.fprintf chan "    movl %%ebp, %%esp\n";
+        Printf.fprintf chan "    pop %%ebp\n";
+        Printf.fprintf chan "    ret\n"
+    end in
+
     (* generate code to execute expression and move result into eax *)
     let rec generate_exp exp var_map =
         match exp with
         | Ast.Assign(Ast.Equals, (Ast.ID id), exp) ->
             let _ = generate_exp exp var_map in
             (* get location of variable on stack *)
-            let var_index = Map.find id var_map in
+            let var_index = safe_map_lookup id var_map in
             (* move value  of eax to that variable *)
             Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
         | Ast.BinOp(op, e1, e2) ->
@@ -83,7 +103,7 @@ let generate filename prog =
                 Printf.fprintf chan "    movl $0, %%eax\n";     (* set eax to 0 *)
                 Printf.fprintf chan "    sete %%al\n");         (* if eax was zero in earlier comparison, set al to 1 *)
         | Ast.Var(Ast.ID id) ->
-            let var_index = Map.find id var_map in
+        let var_index = safe_map_lookup id var_map in
             (* move value  of variable to eax *)
             Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index;
         | Ast.FunCall(Ast.ID id, args) ->
@@ -153,13 +173,8 @@ let generate filename prog =
         | Ast.Exp(e) -> generate_exp e var_map; var_map, stack_index
         | Ast.ReturnVal exp -> 
             let _ = generate_exp exp var_map in
-            begin
-                Printf.fprintf chan "    movl %%ebp, %%esp\n";
-                Printf.fprintf chan "    pop %%ebp\n";
-                Printf.fprintf chan "    ret\n"; 
-                var_map, stack_index
-            end
-
+            let _ = emit_function_epilogue () in
+            var_map, stack_index
 
 (*
     for (i = 0; i < 5; i = i + 1) {
@@ -244,13 +259,16 @@ _post_loop:
                 reverse fun_params b/c they go on stack right to left
             *)
             let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si + 4)) (Map.empty, 8) (List.rev fun_params) in
-            generate_statement_list statements var_map (-4) in (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
+            let _ = generate_statement_list statements var_map (-4) in (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
+            (* generate function epilogue and ret, so function returns even if missing return statement *)
+            emit_function_epilogue ()
+            in         
 
     let rec generate_funs = function
         | [] -> ()
         | f::fs -> generate_fun f; generate_funs fs  in
 
     match prog with
-    | Ast.Prog fun_list ->  
+    | Ast.Prog fun_list ->
         let _ = generate_funs fun_list in
         close_out chan
