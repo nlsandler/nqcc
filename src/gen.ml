@@ -266,7 +266,8 @@ _post_loop:
             *)
             let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si + 4)) (Map.empty, 8) (List.rev fun_params) in
             let _ = generate_statement_list statements var_map Set.empty (-4) in (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
-            (* generate function epilogue and ret, so function returns even if missing return statement *)
+            (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
+            Printf.fprintf chan "    movl $0, %%eax\n";
             emit_function_epilogue ()
             in         
 
