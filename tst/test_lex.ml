@@ -78,7 +78,9 @@ let lex_punctuation_tests = [
     "test_lex_bitwise_or" >:: test_lex_single "|" (Tok.BitOr);
     "test_lex_xor" >:: test_lex_single "^" (Tok.Xor);
     "test_lex_shiftl" >:: test_lex_single "<<" (Tok.ShiftLeft);
-    "test_lex_shiftr" >:: test_lex_single ">>" (Tok.ShiftRight)
+    "test_lex_shiftr" >:: test_lex_single ">>" (Tok.ShiftRight);
+    "test_lex_question" >:: test_lex_single "?" (Tok.Question);
+    "test_lex_colon" >:: test_lex_single ":" (Tok.Colon)
 ]
 
 let lex_id_tests = [

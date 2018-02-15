@@ -52,6 +52,7 @@ let assign_op_to_string = function
 let rec exp_to_string = function
     | Ast.Var(Ast.ID v) -> Printf.sprintf "VAR<%s>" v
     | Ast.Const c -> const_to_string c
+    | Ast.TernOp (e1, e2, e3) -> Printf.sprintf "%s ? %s : %s" (exp_to_string e1) (exp_to_string e2) (exp_to_string e3)
     | Ast.BinOp(op, e1, e2) -> Printf.sprintf "(%s %s %s)" (exp_to_string e1) (op_to_string op) (exp_to_string e2)
     | Ast.UnOp(op, e) -> Printf.sprintf "(%s %s)" (unop_to_string op) (exp_to_string e)
     | Ast.FunCall(fun_id, args) -> Printf.sprintf "%s(%s)" (id_to_string fun_id) (args_to_string args)

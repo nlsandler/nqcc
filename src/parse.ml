@@ -139,6 +139,20 @@ and parse_and_exp toks = parse_bin_exp parse_bitwise_or_exp [Tok.And] toks
 
 and parse_or_exp toks = parse_bin_exp parse_and_exp [Tok.Or] toks
 
+and parse_ternary_exp toks =
+    let exp_1, rest = parse_or_exp toks in
+    match rest with
+    | Tok.Question::branch1_tokens ->
+        let branch1, rest = parse_exp branch1_tokens in
+        begin
+        match rest with
+        | Tok.Colon::branch2_tokens ->
+            let branch2, rest = parse_exp branch2_tokens in
+            Ast.TernOp (exp_1, branch1, branch2), rest
+        | _ -> failwith("Expected colon after ternary operator")
+        end
+    | _ -> exp_1, rest
+
 and parse_exp tokens =
     match tokens with
     | Tok.Id(v)::Tok.Eq::rest ->
@@ -146,7 +160,7 @@ and parse_exp tokens =
         let var_id = Ast.ID(v) in
         let exp, rest = parse_exp rest in
         Ast.Assign(Ast.Equals, var_id, exp), rest
-    | _ -> parse_or_exp tokens
+    | _ -> parse_ternary_exp tokens
 
 let parse_declaration var_type tokens =
     match tokens with

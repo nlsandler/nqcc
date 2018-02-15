@@ -5,7 +5,9 @@ type token =
     | OpenParen
     | CloseParen
     | Comma
+    | Question
     | Semicolon
+    | Colon
     | IntKeyword
     | CharKeyword
     | ReturnKeyword

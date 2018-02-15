@@ -1,6 +1,6 @@
 open Batteries
 
-let compile prog_filename = 
+let compile prog_filename =
     let source_lines = File.lines_of prog_filename in
     let ast = Enum.reduce (fun line1 line2 -> line1^" "^line2) source_lines
     |> Lex.lex

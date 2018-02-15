@@ -111,6 +111,8 @@ and lex_rest words =
     | ';'::rest -> Semicolon::(lex_rest rest)
     | ','::rest -> Comma::(lex_rest rest)
     | '+'::rest -> Plus::(lex_rest rest)
+    | '?'::rest -> Question::(lex_rest rest)
+    | ':'::rest -> Colon::(lex_rest rest)
     | '-'::'-'::rest -> failwith("decrement not yet implemented")
     | '<'::'<'::rest -> ShiftLeft::(lex_rest rest)
     | '>'::'>'::rest -> ShiftRight::(lex_rest rest)
@@ -147,6 +149,8 @@ let tok_to_string t =
     | OpenParen -> "("
     | CloseParen -> ")"
     | Semicolon -> ";"
+    | Colon -> ":"
+    | Question -> "?"
     | Comma -> ","
     | Plus -> "+"
     | Minus -> "-"

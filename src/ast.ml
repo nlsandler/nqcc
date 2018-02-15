@@ -34,6 +34,7 @@ type exp =
     | Var of id
     | UnOp of unop * exp
     | BinOp of binop * exp * exp
+    | TernOp of exp * exp * exp
     | Assign of assign_op * id * exp
     | FunCall of id * exp list
 type declaration = 

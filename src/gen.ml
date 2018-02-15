@@ -2,7 +2,7 @@ open Batteries
 
 let generate filename prog =
 
-    (* Open assembly file for writing *) 
+    (* Open assembly file for writing *)
     let filename_asm = String.splice filename (-1) 1 "s" in
     let chan = open_out filename_asm in
 
@@ -43,18 +43,41 @@ let generate filename prog =
             let var_index = safe_map_lookup id var_map in
             (* move value  of eax to that variable *)
             Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
+        | Ast.TernOp(e1, e2, e3) ->
+            let post_tern_label = Util.unique_id "post_ternary" in
+            let e3_label = Util.unique_id "second_branch_label" in
+            begin
+                (* TODO: refactor? this is a lot like 'if' *)
+
+                (* calculate cond *)
+                generate_exp e1 var_map;
+                (* is cond true? *)
+                Printf.fprintf chan "    cmp   $0, %%eax\n";
+                (* if it's false, jump to 'else' exp *)
+                Printf.fprintf chan "    je   %s\n" e3_label;
+                (* Generate 'if' block *)
+                generate_exp e2 var_map;
+                (* after 'if', jump over 'else' *)
+                Printf.fprintf chan "    jmp    %s\n" post_tern_label;
+                (* Label start of 'else' *)
+                Printf.fprintf chan "%s:\n" e3_label;
+                (* Generate 'else' *)
+                generate_exp e3 var_map;
+                (* Label end of ternary operation *)
+                Printf.fprintf chan "%s:\n" post_tern_label
+            end
         | Ast.BinOp(op, e1, e2) ->
             let _ = generate_exp e1 var_map in
             let _ = Printf.fprintf chan "    push %%eax\n"  in
             let _ = generate_exp e2 var_map in
             let _ =
-                begin(* op s, d computes d = op(d,s), so put e2 in ecx, e1 in eax *) 
+                begin(* op s, d computes d = op(d,s), so put e2 in ecx, e1 in eax *)
                     Printf.fprintf chan "    movl %%eax, %%ecx\n";
                     (* Put e1 in eax (where it needs to be for idiv) *)
                     Printf.fprintf chan "    pop %%eax\n";
                 end in
-            (match op with               
-            | Ast.Div ->                        
+            (match op with
+            | Ast.Div ->
                     (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
                     Printf.fprintf chan "    xor %%edx, %%edx\n";
                     Printf.fprintf chan "    idivl %%ecx\n";
@@ -98,7 +121,7 @@ let generate filename prog =
             | Ast.Pos -> ()(* No-op for now - eventually handle casting to int if needed *)
             | Ast.Negate -> Printf.fprintf chan "    neg %%eax\n";
             | Ast.Complement -> Printf.fprintf chan "    not %%eax\n";
-            | Ast.Not -> 
+            | Ast.Not ->
                 Printf.fprintf chan "    cmpl $0, %%eax\n";     (* compare eax to 0 *)
                 Printf.fprintf chan "    movl $0, %%eax\n";     (* set eax to 0 *)
                 Printf.fprintf chan "    sete %%al\n");         (* if eax was zero in earlier comparison, set al to 1 *)
@@ -111,14 +134,14 @@ let generate filename prog =
             let _ = put_args_on_stack args var_map in
             Printf.fprintf chan "    call _%s\n" id;
             Printf.fprintf chan "    addl $%d, %%esp\n" (arg_count * 4);
-        | Ast.Const(Ast.Int i) -> 
+        | Ast.Const(Ast.Int i) ->
             Printf.fprintf chan "    movl    $%d, %%eax\n" i;
         | Ast.Const(Ast.Char c) ->
             Printf.fprintf chan "    movl    $%d, %%eax\n" (Char.code c);
-        | _ -> failwith("Constant not supported") 
+        | _ -> failwith("Constant not supported")
 
     and put_args_on_stack args var_map =
-        let push_arg arg = 
+        let push_arg arg =
             generate_exp arg var_map;
             Printf.fprintf chan "    pushl %%eax\n";
         in
@@ -144,7 +167,7 @@ let generate filename prog =
         match statement with
         | Ast.Decl(declaration) -> generate_declaration declaration var_map current_scope stack_index
         | Ast.For _  -> begin
-            generate_for_loop statement var_map stack_index; 
+            generate_for_loop statement var_map stack_index;
             var_map, current_scope, stack_index
         end
         | Ast.ForDecl _  -> begin
@@ -164,7 +187,7 @@ let generate filename prog =
                 (* generate if body *)
                 generate_statement_list body var_map Set.empty stack_index in
             (match else_body with
-            | Some else_statements -> 
+            | Some else_statements ->
                 let post_else_label = Util.unique_id "post_else" in
                 (* We're at end of if statement, need to jump over the else statement *)
                 Printf.fprintf chan "    jmp     %s\n" post_else_label;
@@ -177,11 +200,11 @@ let generate filename prog =
                 var_map, current_scope, stack_index
             | None ->
                 (* print out label that comes after if statement *)
-                Printf.fprintf chan "%s:\n" post_if_label; 
+                Printf.fprintf chan "%s:\n" post_if_label;
                 var_map, current_scope, stack_index)
         | Ast.Exp(e) -> generate_exp e var_map; var_map, current_scope, stack_index
         (* for return statements, variable map/stack index unchanged *)
-        | Ast.ReturnVal exp -> 
+        | Ast.ReturnVal exp ->
             let _ = generate_exp exp var_map in
             let _ = emit_function_epilogue () in
             var_map, current_scope, stack_index
@@ -199,7 +222,7 @@ _loop:
     do i = i + 1
     jmp _loop
 _post_loop:
-    ...    
+    ...
 
 *)
     and generate_for_loop Ast.(For { init ; cond ; post ; body }) var_map stack_index =
@@ -243,7 +266,7 @@ _post_loop:
             Printf.fprintf chan "    jmp %s\n" loop_label;
             (* label end of loop *)
             Printf.fprintf chan "%s:\n" post_loop_label
-        end    
+        end
 
     and generate_statement_list statements var_map current_scope stack_index =
         match statements with
@@ -252,7 +275,7 @@ _post_loop:
             generate_statement_list stmts var_map' current_scope' stack_index'
         | [] -> () in
 
-    let generate_fun f = 
+    let generate_fun f =
         match f with
         | Ast.FunDecl(fun_type, Ast.ID(fun_name), fun_params, Ast.Body(statements)) ->
             let _ = begin
@@ -261,7 +284,7 @@ _post_loop:
                 Printf.fprintf chan "    movl %%esp, %%ebp\n"
             end
             in
-            (* arguments are just below return address, which is just below EBP, so first arg at ebp + 8 
+            (* arguments are just below return address, which is just below EBP, so first arg at ebp + 8
                 reverse fun_params b/c they go on stack right to left
             *)
             let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si + 4)) (Map.empty, 8) (List.rev fun_params) in
@@ -269,7 +292,7 @@ _post_loop:
             (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
             Printf.fprintf chan "    movl $0, %%eax\n";
             emit_function_epilogue ()
-            in         
+            in
 
     let rec generate_funs = function
         | [] -> ()

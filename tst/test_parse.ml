@@ -3,7 +3,7 @@ open OUnit2
 (* AST COMPARISON *)
 let compare_ids (Ast.ID expected_id) (Ast.ID actual_id) = String.equal expected_id actual_id
 
-let compare_params (Ast.Param(t1, id1)) (Ast.Param(t2, id2)) = 
+let compare_params (Ast.Param(t1, id1)) (Ast.Param(t2, id2)) =
     (t1 == t2) && (compare_ids id1 id2)
 
 let compare_consts expected actual =
@@ -16,7 +16,7 @@ let rec compare_exps expected actual =
     match expected, actual with
     | Ast.Const(expected_const), Ast.Const(actual_const) -> compare_consts expected_const actual_const
     | Ast.Var(id1), Ast.Var(id2) -> compare_ids id1 id2
-    | Ast.BinOp(expected_op, expected_e1, expected_e2), Ast.BinOp(actual_op, actual_e1, actual_e2) -> 
+    | Ast.BinOp(expected_op, expected_e1, expected_e2), Ast.BinOp(actual_op, actual_e1, actual_e2) ->
         (expected_op == actual_op) && compare_exps expected_e1 actual_e1 && compare_exps expected_e2 actual_e2
     | Ast.UnOp(expected_op, expected_exp), Ast.UnOp(actual_op, actual_exp) ->
         (expected_op == actual_op) && compare_exps expected_exp actual_exp
@@ -24,6 +24,8 @@ let rec compare_exps expected actual =
         compare_ids expected_id actual_id && List.for_all2 compare_exps expected_args actual_args
     | Ast.Assign(expected_op, expected_id, expected_exp), Ast.Assign(actual_op, actual_id, actual_exp) ->
         (expected_op == actual_op) && compare_ids expected_id actual_id && compare_exps expected_exp actual_exp
+    | Ast.TernOp (expected_1, expected_2, expected_3), Ast.TernOp (actual_1, actual_2, actual_3) ->
+        compare_exps expected_1 actual_1 && compare_exps expected_2 actual_2 && compare_exps expected_3 actual_3
     | _ -> false
 
 let compare_declarations 
@@ -415,9 +417,20 @@ let single_if_else_ast =
     let if_statement = Ast.If(if_condition, if_body, Some(else_body)) in
     make_ast [] [if_statement]
 
+let ternary_tokens = Lex.lex "int main(){ return 3 < 4 ? 5 : 6; }"
+let ternary_ast =
+    let condition = Ast.BinOp (Ast.Lt, (Ast.Const (Ast.Int 3)), (Ast.Const (Ast.Int 4))) in
+    let e1 = Ast.Const (Ast.Int 5) in
+    let e2 = Ast.Const (Ast.Int 6) in
+    let ternop = Ast.TernOp (condition, e1, e2) in
+    make_simple_ast [] ternop
+
+(* TODO: test nested ternary statements, i'm not totally sure this is right *)
+
 let conditional_parse_tests = [
     "test_single_if" >:: test_compare_asts single_if_tokens single_if_ast;
     "test_single_if_else" >:: test_compare_asts single_if_else_tokens single_if_else_ast;
+    "test_ternary" >:: test_compare_asts ternary_tokens ternary_ast
 ]
 
 (* FOR LOOPS *)
@@ -496,7 +509,7 @@ let failure_parse_tests = [
     "test_semicolon_required" >:: test_expect_failure missing_semicolon "Expected semicolon at end of statement";
     "test_incomplete_addition" >:: test_expect_failure incomplete_addition "Failed to parse factor";
     "test_mismatched_parens" >:: test_expect_failure mismatched_parens "Syntax error: expected close paren";
-    "test_mismatched_right_parens" >:: test_expect_failure mismatched_right_parens "Expected semicolon at end of statement";    
+    "test_mismatched_right_parens" >:: test_expect_failure mismatched_right_parens "Expected semicolon at end of statement";
     "test_one_paren" >:: test_expect_failure one_paren "Syntax error: expected close paren";
     "test_backwards_parens" >:: test_expect_failure backwards_parens "Failed to parse factor";
 ]
