@@ -2,10 +2,10 @@ open Batteries
 
 let rec parse_fun_params = function
     | Tok.CloseParen::rest -> ([], rest)
-    | Tok.IntKeyword::(Tok.Id name)::rest -> 
+    | Tok.IntKeyword::(Tok.Id name)::rest ->
         let other_params, rest = parse_fun_params rest in
         (Ast.Param(Ast.IntType, Ast.ID(name))::other_params, rest)
-    | Tok.CharKeyword::(Tok.Id name)::rest -> 
+    | Tok.CharKeyword::(Tok.Id name)::rest ->
         let other_params, rest = parse_fun_params rest in
         (Ast.Param(Ast.CharType, Ast.ID(name))::other_params, rest)
     | _ -> failwith("Parse error in parse_fun_params")
@@ -43,7 +43,7 @@ let op_map = Map.empty
  * Parse one production rule for a binary operation.
  * One production rule in the grammar corresponds to a particular precedence level.
  * Parameters:
- * - parse_next_level is a function to parse expressions 
+ * - parse_next_level is a function to parse expressions
  *   at the next highest precedence level.
  * - op_toks is the list of tokens that should be parsed at this precedence level.
  * - toks is the tokenized source code to parse
@@ -87,7 +87,7 @@ and parse_function_arguments = function
     | Tok.CloseParen::rest -> [], rest
     | toks ->
         let arg, rest = parse_exp toks in
-        let args, rest = 
+        let args, rest =
             match rest with
             | Tok.Comma::more_args -> parse_function_arguments more_args
             | Tok.CloseParen::after_fun_call -> [], after_fun_call
@@ -96,7 +96,7 @@ and parse_function_arguments = function
 
 and parse_factor toks =
     match toks with
-    | Tok.OpenParen::factor -> 
+    | Tok.OpenParen::factor ->
         let exp, after_exp = parse_exp factor in
         (match after_exp with
         | (Tok.CloseParen)::rest -> (exp, rest)
@@ -169,11 +169,11 @@ let parse_declaration var_type tokens =
         let init, rest =
             match rest with
             | Tok.Semicolon::rest_of_statements -> None, rest
-            | Tok.Eq::rest -> 
+            | Tok.Eq::rest ->
                 let exp, rest = parse_exp rest in
                 Some(exp), rest
             | _ -> failwith("Invalid initial value for variable")
-        in 
+        in
         let declaration = Ast.{
             var_type = var_type;
             var_name = var_id;
@@ -217,7 +217,7 @@ and parse_for_components toks =
     in
     let body, rest =
         match rest with
-        | Tok.CloseParen::body_toks -> parse_statement_block body_toks
+        | Tok.CloseParen::body_toks -> parse_statement_or_block body_toks
         | _ -> failwith "Expected closing paren in for loop"
     in
     cond, post, body, rest
@@ -236,33 +236,33 @@ and parse_for_statement = function
 
 and parse_statement_or_block tokens =
     if (List.hd tokens) == Tok.OpenBrace
-    then parse_statement_block tokens
+    then parse_block tokens
     else
         let stmt, rest = parse_statement tokens in
-        [stmt], rest
+        stmt, rest
 
-and parse_statement_block = function
+and parse_block = function
     | Tok.OpenBrace::statements ->
         let statement_list, after_list = parse_statement_list statements in
         (match after_list with
-        | Tok.CloseBrace::rest -> statement_list, rest
+        | Tok.CloseBrace::rest -> (Ast.Block statement_list), rest
         | _ -> failwith("Expected '}' after statement list"))
-    | _ -> failwith("PANIC: parse_statement_block called on non statement block")
+    | _ -> failwith("PANIC: parse_block called on non statement block")
 
 (* TODO: actually pay attention to types *)
 and parse_statement tokens =
     let stmt, rest =
         (match tokens with
-        | Tok.IntKeyword::rest -> 
+        | Tok.IntKeyword::rest ->
             let decl, rest = parse_declaration Ast.IntType rest in
             (Ast.Decl decl), rest
-        | Tok.CharKeyword::rest -> 
+        | Tok.CharKeyword::rest ->
             let decl, rest = parse_declaration Ast.CharType rest in
             (Ast.Decl decl), rest
         | Tok.IfKeyword::rest -> parse_if_statement tokens
         | Tok.ForKeyword::rest -> parse_for_statement tokens
         | Tok.ReturnKeyword::rest -> parse_return_statement tokens
-        | _ -> 
+        | _ ->
             let exp, rest = parse_exp tokens in
             Ast.Exp(exp), rest) in
     match stmt, rest with
@@ -272,7 +272,7 @@ and parse_statement tokens =
     | Ast.ForDecl _, _ -> stmt, rest
     (* expressions & declarations do *)
     | _, Tok.Semicolon::rest -> stmt, rest (* eat semicolon from end of statement *)
-    | _ -> failwith("Expected semicolon at end of statement") 
+    | _ -> failwith("Expected semicolon at end of statement")
 
 and parse_statement_list tokens =
     if (List.hd tokens) == Tok.CloseBrace
@@ -280,7 +280,7 @@ and parse_statement_list tokens =
     else
         let next_statement, rest = parse_statement tokens in
         let statements, rest = parse_statement_list rest in
-        next_statement::statements, rest        
+        next_statement::statements, rest
 
 let parse_fun_body tokens = (* Assume for now there's nothing after function body *)
     let statements, rest = parse_statement_list tokens in
@@ -289,13 +289,13 @@ let parse_fun_body tokens = (* Assume for now there's nothing after function bod
     | _ -> failwith("Expected closing brace")
 
 let parse_fun tokens =
-    let fun_type, fun_name, rest = 
+    let fun_type, fun_name, rest =
         match tokens with
         | Tok.IntKeyword::(Tok.Id name)::Tok.OpenParen::rest -> (Ast.IntType, Ast.ID(name), rest)
         | Tok.CharKeyword::(Tok.Id name)::Tok.OpenParen::rest -> (Ast.CharType, Ast.ID(name), rest)
         | _ -> failwith("Parse error in parse_fun: bad function type or name") in
     let fun_params, rest = parse_fun_params rest in
-    let fun_body, rest = 
+    let fun_body, rest =
         match rest with
         | Tok.OpenBrace::rest -> parse_fun_body rest
         | _ -> failwith("Expected brace to open function body") in

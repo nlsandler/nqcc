@@ -57,7 +57,7 @@ let rec exp_to_string = function
     | Ast.UnOp(op, e) -> Printf.sprintf "(%s %s)" (unop_to_string op) (exp_to_string e)
     | Ast.FunCall(fun_id, args) -> Printf.sprintf "%s(%s)" (id_to_string fun_id) (args_to_string args)
     | Ast.Assign(op, Ast.ID(var_name), rhs) ->
-        Printf.sprintf "\t\t%s %s %s\n" var_name (assign_op_to_string op) (exp_to_string rhs)
+        Printf.sprintf "%s %s %s\n" var_name (assign_op_to_string op) (exp_to_string rhs)
 
 and args_to_string args =
     let arg_strings = List.map exp_to_string args in
@@ -71,28 +71,33 @@ let pprint_decl Ast.{ var_type; var_name=ID(id); init } =
 let rec pprint_stmt = function
     | Ast.Decl(decl) -> pprint_decl decl
     | Ast.ReturnVal(e) -> Printf.printf "\t\tRETURN %s\n" (exp_to_string e)
+    | Ast.Block statements -> begin
+        Printf.printf "{";
+        List.iter pprint_stmt statements;
+        Printf.printf "}"
+      end
     | Ast.If(cond, then_body, else_body) ->
         Printf.printf "\t\tIF (%s) {\n" (exp_to_string cond);
-        List.iter pprint_stmt then_body;
+        pprint_stmt then_body;
         begin match else_body with
-        | Some statements ->
+        | Some statement ->
             Printf.printf "\t\t} ELSE {\n";
-            List.iter pprint_stmt statements;
+            pprint_stmt statement;
             Printf.printf "\t\t}\n"
         | None -> Printf.printf "\t\t}\n"
         end
     | Ast.(For { init; cond; post; body }) ->
         Printf.printf "\t\tFOR (%s ; %s ; %s) {\n"
             (exp_to_string init) (exp_to_string cond) (exp_to_string post);
-        List.iter pprint_stmt body;
+        pprint_stmt body;
         Printf.printf"\t\t}\n"
     | Ast.(ForDecl { init; cond; post; body }) ->
         Printf.printf "\t\tFOR ( ";
         pprint_decl init;
         Printf.printf " ; %s ; %s ) {\n" (exp_to_string cond) (exp_to_string post);
-        List.iter pprint_stmt body;
-        Printf.printf"\t\t}\n";   
-    | Ast.Exp(e) -> Printf.printf "%s" (exp_to_string e) 
+        pprint_stmt body;
+        Printf.printf"\t\t}\n";
+    | Ast.Exp(e) -> Printf.printf "%s" (exp_to_string e)
 
 let pprint_function_body (Ast.Body(stmts)) =
     print_string "\tbody:\n";

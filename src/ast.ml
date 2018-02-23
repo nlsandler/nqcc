@@ -44,10 +44,11 @@ type declaration =
     }
 type statement =
     | Decl of declaration
-    | If of exp * statement list * statement list option (* condition, if body, optional else body *)
+    | Block of statement list
+    | If of exp * statement * statement option (* condition, if body, optional else body *)
     | Exp of exp
-    | For of {init: exp; cond: exp; post: exp; body: statement list}
-    | ForDecl of {init: declaration; cond: exp; post: exp; body: statement list}
+    | For of {init: exp; cond: exp; post: exp; body: statement}
+    | ForDecl of {init: declaration; cond: exp; post: exp; body: statement}
     | ReturnVal of exp (* should we add a return_exp instead? *)
 type fun_param = Param of type_def * id
 type fun_body = Body of statement list

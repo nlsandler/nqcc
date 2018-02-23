@@ -174,30 +174,38 @@ let generate filename prog =
             generate_for_decl_loop statement var_map stack_index;
             var_map, current_scope, stack_index
         end
+        | Ast.Block statements -> begin
+            generate_statement_list statements var_map Set.empty stack_index;
+            var_map, current_scope, stack_index
+          end
         | Ast.If(cond, body, else_body) ->
             (* TODO refactor this into own function *)
             (* evaluate condition *)
             let _ = generate_exp cond var_map in
             let post_if_label = Util.unique_id "post_if" in
-            let _ = (* stuff that's the same whether or not there's an else block *)
+            let _ = begin
+                (* stuff that's the same whether or not there's an else block *)
                 (* compare cond to false *)
                 Printf.fprintf chan "    cmp     $0, %%eax\n";
                 (* if cond is false, jump over if body *)
                 Printf.fprintf chan "    je      %s\n" post_if_label;
                 (* generate if body *)
-                generate_statement_list body var_map Set.empty stack_index in
+                generate_statement body var_map current_scope stack_index
+              end in
             (match else_body with
-            | Some else_statements ->
+            | Some else_statement ->
                 let post_else_label = Util.unique_id "post_else" in
-                (* We're at end of if statement, need to jump over the else statement *)
-                Printf.fprintf chan "    jmp     %s\n" post_else_label;
-                (* now print out label after if statement *)
-                Printf.fprintf chan "%s:\n" post_if_label;
-                (* now generate else statement *)
-                generate_statement_list else_statements var_map Set.empty stack_index;
-                (* now print post-else label *)
-                Printf.fprintf chan "%s:" post_else_label;
-                var_map, current_scope, stack_index
+                begin
+                  (* We're at end of if statement, need to jump over the else statement *)
+                  Printf.fprintf chan "    jmp     %s\n" post_else_label;
+                  (* now print out label after if statement *)
+                  Printf.fprintf chan "%s:\n" post_if_label;
+                  (* now generate else statement *)
+                  generate_statement else_statement var_map current_scope stack_index;
+                  (* now print post-else label *)
+                  Printf.fprintf chan "%s:" post_else_label;
+                  var_map, current_scope, stack_index
+                end
             | None ->
                 (* print out label that comes after if statement *)
                 Printf.fprintf chan "%s:\n" post_if_label;
@@ -237,7 +245,7 @@ _post_loop:
             Printf.fprintf chan "    cmp $0, %%eax\n";
             Printf.fprintf chan "    je %s\n" post_loop_label;
             (* evaluate loop body - new scope, so current_scope set is empty *)
-            generate_statement_list body var_map Set.empty stack_index;
+            generate_statement body var_map Set.empty stack_index;
             (* evaluate post expression *)
             generate_exp post var_map;
             (* execute loop again *)
@@ -259,7 +267,7 @@ _post_loop:
             Printf.fprintf chan "    cmp $0, %%eax\n";
             Printf.fprintf chan "    je %s\n" post_loop_label;
             (* evaluate loop body, which is a new scope *)
-            generate_statement_list body var_map' Set.empty stack_index';
+            generate_statement body var_map' Set.empty stack_index';
             (* evaluate post expression *)
             generate_exp post var_map';
             (* execute loop again *)
