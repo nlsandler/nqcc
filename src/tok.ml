@@ -1,5 +1,5 @@
 (* A token in a C progrm *)
-type token = 
+type token =
     | OpenBrace
     | CloseBrace
     | OpenParen

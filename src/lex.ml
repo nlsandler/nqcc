@@ -7,10 +7,10 @@ open Batteries
     -0x followed by one or more hex digits (0-9, a-f)
     -everything else
     all case insensitive
-*) 
+*)
 let int_regexp = Str.regexp_case_fold "\\(\\([0-9]+\\)\\|\\(0x[0-9a-f]+\\)\\)\\(\\b.*\\)"
 (*
-    id_regexp: ([A-Za-z][A-Za-z0-9_]* )(\b.* ) 
+    id_regexp: ([A-Za-z][A-Za-z0-9_]* )(\b.* )
 *)
 let id_regexp = Str.regexp "\\([A-Za-z_][A-Za-z0-9_]*\\)\\(\\b.*\\)"
 (*
@@ -27,7 +27,7 @@ let id_regexp = Str.regexp "\\([A-Za-z_][A-Za-z0-9_]*\\)\\(\\b.*\\)"
 *)
 let char_regexp = Str.regexp "'\\([^'\\\\]\\|\\\\\\([abfenrtv'\"?\\\\]\\|[0-7]+\\|x[0-9a-fA-F]+\\)\\)'\\(.*\\)"
 
-let get_char char_token = 
+let get_char char_token =
     match String.length char_token with
     | 1 -> String.get char_token 0 (* a single character *)
     | 2 -> (* escape sequence *)
@@ -47,14 +47,14 @@ let get_char char_token =
         | _ -> failwith("Unknown escape sequence "^char_token)
         end
     | _ -> (* different prefix for hex or octal *)
-        let prefix = if String.get char_token 1 = 'x' then "0" else "0o" in 
+        let prefix = if String.get char_token 1 = 'x' then "0" else "0o" in
         let num_str = prefix^(String.slice ~first:1 char_token) in
         Char.chr (Int.of_string num_str)
 
 let get_int int_token =
     if (String.get int_token 0 = '0') &&
         String.length int_token > 1 &&
-        (Char.lowercase (String.get int_token 1) <> 'x') 
+        (Char.lowercase (String.get int_token 1) <> 'x')
     then int_of_string ("0o"^int_token) (* octal *)
     else int_of_string int_token (* hex or decimal *)
 
@@ -73,11 +73,11 @@ let get_id t =
 
 let lex_complex_token input =
     if Str.string_match int_regexp input 0
-    then (* it's an int *) 
+    then (* it's an int *)
         let int_token = Str.matched_group 1 input in
         let int_val = get_int int_token in
         if int_val > Int32.to_int Int32.max_int || int_val < Int32.to_int Int32.min_int
-        then failwith("Invalid int literal") 
+        then failwith("Invalid int literal")
         else
             let rest = Str.matched_group 4 input in
             (Tok.Int int_val), rest
@@ -100,7 +100,7 @@ let rec lex_const_or_id input_toks =
     let tok, rest = lex_complex_token input in
     tok::(lex_rest (String.explode rest))
 
-and lex_rest words = 
+and lex_rest words =
     let open Tok in
     match words with
     | [] -> []
@@ -134,7 +134,7 @@ and lex_rest words =
     | '!'::rest -> Bang::(lex_rest rest)
     | '='::'='::rest -> DoubleEq::(lex_rest rest)
     | '='::rest -> Eq::(lex_rest rest)
-    | c::rest -> 
+    | c::rest ->
         if Char.is_whitespace c then lex_rest rest else lex_const_or_id words
 
 let lex input =
