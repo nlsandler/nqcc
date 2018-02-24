@@ -68,17 +68,20 @@ let pprint_decl Ast.{ var_type; var_name=ID(id); init } =
     | None -> Printf.printf "\t\t%s %s\n" (type_to_string var_type) id
     | Some e -> Printf.printf "\t\t%s %s = %s\n" (type_to_string var_type) id (exp_to_string e)
 
-let rec pprint_stmt = function
-    | Ast.Decl(decl) -> pprint_decl decl
+let rec pprint_block_item = function
+  | Ast.Decl d -> pprint_decl d
+  | Ast.Statement s -> pprint_stmt s
+
+and pprint_stmt = function
     | Ast.ReturnVal(e) -> Printf.printf "\t\tRETURN %s\n" (exp_to_string e)
-    | Ast.Block statements -> begin
+    | Ast.Block block_items -> begin
         Printf.printf "{";
-        List.iter pprint_stmt statements;
+        List.iter pprint_block_item block_items;
         Printf.printf "}"
       end
-    | Ast.If(cond, then_body, else_body) ->
+    | Ast.If { cond; if_body; else_body } ->
         Printf.printf "\t\tIF (%s) {\n" (exp_to_string cond);
-        pprint_stmt then_body;
+        pprint_stmt if_body;
         begin match else_body with
         | Some statement ->
             Printf.printf "\t\t} ELSE {\n";
@@ -99,14 +102,14 @@ let rec pprint_stmt = function
         Printf.printf"\t\t}\n";
     | Ast.Exp(e) -> Printf.printf "%s" (exp_to_string e)
 
-let pprint_function_body (Ast.Body(stmts)) =
+let pprint_function_body body =
     print_string "\tbody:\n";
-    List.map pprint_stmt stmts
+    List.map pprint_block_item body
 
-let pprint_function (Ast.FunDecl(fun_type, fun_id, fun_params, fun_body)) =
-    let _ = pprint_function_decl fun_type fun_id in
-    let _ = pprint_function_params fun_params in
-    let _ = pprint_function_body fun_body in
+let pprint_function (Ast.FunDecl { fun_type; name; params; body }) =
+    let _ = pprint_function_decl fun_type name in
+    let _ = pprint_function_params params in
+    let _ = pprint_function_body body in
     ()
 
 let pprint (Ast.Prog funs) = List.iter pprint_function funs

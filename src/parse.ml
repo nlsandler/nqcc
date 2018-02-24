@@ -153,14 +153,13 @@ and parse_ternary_exp toks =
         end
     | _ -> exp_1, rest
 
-and parse_exp tokens =
-    match tokens with
-    | Tok.Id(v)::Tok.Eq::rest ->
-        (* assignment statement *)
-        let var_id = Ast.ID(v) in
-        let exp, rest = parse_exp rest in
-        Ast.Assign(Ast.Equals, var_id, exp), rest
-    | _ -> parse_ternary_exp tokens
+and parse_exp = function
+  | Tok.Id(v)::Tok.Eq::rest ->
+     (* assignment statement *)
+     let var_id = Ast.ID(v) in
+     let exp, rest = parse_exp rest in
+     Ast.Assign(Ast.Equals, var_id, exp), rest
+  | tokens -> parse_ternary_exp tokens
 
 let parse_declaration var_type tokens =
     match tokens with
@@ -180,36 +179,43 @@ let parse_declaration var_type tokens =
             init = init;
         }
         in
-        declaration, rest
+        begin
+          match rest with
+          | Tok.Semicolon::rest -> declaration, rest
+          | _ -> failwith("Expected semicolon after declaration")
+        end
     | _ -> failwith("Invalid variable declaration")
 
-let parse_return_statement = function
-    | Tok.ReturnKeyword::rest ->
-        let exp, rest = parse_exp rest in
-        Ast.ReturnVal(exp), rest
-    | _ -> failwith("Expected return statement")
+let parse_return_statement stmt =
+  let exp, rest = parse_exp stmt in
+  Ast.ReturnVal(exp), rest
 
-let rec parse_if_statement = function
-    | Tok.IfKeyword::(Tok.OpenParen::_ as toks) ->
+let rec parse_block = function
+  | Tok.OpenBrace::more_tokens ->
+     begin
+       let block_items, rest = parse_block_item_list more_tokens in
+       match rest with
+       | Tok.CloseBrace::rest -> block_items, rest
+       | _ -> failwith("Expected closing brace at end of block")
+     end
+  | _ -> failwith("Expected opening brace at start of block")
+
+and parse_if_statement = function
+  | Tok.OpenParen::_ as toks ->
         let cond, rest = parse_exp toks in
-        let if_body, rest = parse_statement_or_block rest in
+        let if_body, rest = parse_statement rest in
         let else_body, rest =
             match rest with
             | Tok.ElseKeyword::else_tokens ->
-                let else_body, rest = parse_statement_or_block else_tokens in
+                let else_body, rest = parse_statement else_tokens in
                 Some(else_body), rest
             | _ -> None, rest in
-        let if_statement = Ast.If(cond, if_body, else_body) in
+        let if_statement = Ast.If { cond; if_body; else_body } in
         if_statement, rest
-    | Tok.IfKeyword::_ -> failwith("Expected '(' after 'if'")
-    | _ -> failwith("PANIC: parse_if_statement called on non-if statement")
+  | _ -> failwith("Expected '(' after 'if'")
 
 and parse_for_components toks =
-    let cond, rest =
-        match toks with
-        | Tok.Semicolon::next_toks -> parse_exp next_toks
-        | _ -> failwith "Expected semicolon in for loop"
-    in
+    let cond, rest = parse_exp toks in
     let post, rest =
         match rest with
         | Tok.Semicolon::next_toks -> parse_exp next_toks
@@ -217,89 +223,75 @@ and parse_for_components toks =
     in
     let body, rest =
         match rest with
-        | Tok.CloseParen::body_toks -> parse_statement_or_block body_toks
+        | Tok.CloseParen::body_toks -> parse_statement body_toks
         | _ -> failwith "Expected closing paren in for loop"
     in
     cond, post, body, rest
 
 and parse_for_statement = function
-    | Tok.ForKeyword::Tok.OpenParen::Tok.IntKeyword::toks ->
-        (* for loop w/ variable declaration *)
-        let init, rest = parse_declaration Ast.IntType toks in
-        let cond, post, body, rest = parse_for_components rest in
-        Ast.ForDecl { init; cond; post; body }, rest
-    | Tok.ForKeyword::Tok.OpenParen::toks ->
-        let init, rest = parse_exp toks in
-        let cond, post, body, rest = parse_for_components rest in
-        Ast.For { init; cond; post; body }, rest
-    | _ -> failwith("PANIC: not a valid for loop")
-
-and parse_statement_or_block tokens =
-    if (List.hd tokens) == Tok.OpenBrace
-    then parse_block tokens
-    else
-        let stmt, rest = parse_statement tokens in
-        stmt, rest
-
-and parse_block = function
-    | Tok.OpenBrace::statements ->
-        let statement_list, after_list = parse_statement_list statements in
-        (match after_list with
-        | Tok.CloseBrace::rest -> (Ast.Block statement_list), rest
-        | _ -> failwith("Expected '}' after statement list"))
-    | _ -> failwith("PANIC: parse_block called on non statement block")
+  | Tok.OpenParen::Tok.IntKeyword::toks ->
+     (* for loop w/ variable declaration *)
+     let init, rest = parse_declaration Ast.IntType toks in
+     let cond, post, body, rest = parse_for_components rest in
+     Ast.ForDecl { init; cond; post; body }, rest
+  | Tok.OpenParen::toks ->
+     let init, rest = parse_exp toks in
+     begin
+       match rest with
+       | Tok.Semicolon::rest ->
+          let cond, post, body, rest = parse_for_components rest in
+          Ast.For { init; cond; post; body }, rest
+       | _ -> failwith("expected semicolon after condition in for loop")
+     end
+  | _ -> failwith("PANIC: expected open paren at start of for loop")
 
 (* TODO: actually pay attention to types *)
-and parse_statement tokens =
-    let stmt, rest =
-        (match tokens with
-        | Tok.IntKeyword::rest ->
-            let decl, rest = parse_declaration Ast.IntType rest in
-            (Ast.Decl decl), rest
-        | Tok.CharKeyword::rest ->
-            let decl, rest = parse_declaration Ast.CharType rest in
-            (Ast.Decl decl), rest
-        | Tok.IfKeyword::rest -> parse_if_statement tokens
-        | Tok.ForKeyword::rest -> parse_for_statement tokens
-        | Tok.ReturnKeyword::rest -> parse_return_statement tokens
-        | _ ->
-            let exp, rest = parse_exp tokens in
-            Ast.Exp(exp), rest) in
-    match stmt, rest with
-    (* statement blocks have no semicolons after them *)
-    | Ast.If _, _ -> stmt, rest
-    | Ast.For _, _ -> stmt, rest
-    | Ast.ForDecl _, _ -> stmt, rest
-    (* expressions & declarations do *)
-    | _, Tok.Semicolon::rest -> stmt, rest (* eat semicolon from end of statement *)
-    | _ -> failwith("Expected semicolon at end of statement")
+and parse_statement = function
+  | (Tok.OpenBrace::_) as tokens ->
+     let block, rest = parse_block tokens in
+     Block block, rest
+  | Tok.IfKeyword::tokens -> parse_if_statement tokens
+  | Tok.ForKeyword::tokens -> parse_for_statement tokens
+  | Tok.ReturnKeyword::tokens ->
+     let statement, rest = parse_return_statement tokens in
+     begin
+       match rest with
+       | Tok.Semicolon::rest -> statement, rest
+       | _ -> failwith("Expected semicolon after return statement")
+     end
+  | tokens ->
+     let exp, rest = parse_exp tokens in
+     begin
+       match rest with
+       | Tok.Semicolon::rest -> Ast.Exp exp, rest
+       | _ -> failwith("Expected semicolon after expression statement")
+     end
 
-and parse_statement_list tokens =
+and parse_block_item = function
+  | Tok.IntKeyword::tokens ->
+     let decl, rest = parse_declaration Ast.IntType tokens in
+     Ast.Decl decl, rest
+  | tokens ->
+     let stmt, rest = parse_statement tokens in
+     Ast.Statement stmt, rest
+
+and parse_block_item_list tokens =
     if (List.hd tokens) == Tok.CloseBrace
     then [], tokens
     else
-        let next_statement, rest = parse_statement tokens in
-        let statements, rest = parse_statement_list rest in
+        let next_statement, rest = parse_block_item tokens in
+        let statements, rest = parse_block_item_list rest in
         next_statement::statements, rest
 
-let parse_fun_body tokens = (* Assume for now there's nothing after function body *)
-    let statements, rest = parse_statement_list tokens in
-    match rest with
-    | Tok.CloseBrace::rest -> Ast.Body(statements), rest
-    | _ -> failwith("Expected closing brace")
-
 let parse_fun tokens =
-    let fun_type, fun_name, rest =
+    let fun_type, name, rest =
         match tokens with
         | Tok.IntKeyword::(Tok.Id name)::Tok.OpenParen::rest -> (Ast.IntType, Ast.ID(name), rest)
         | Tok.CharKeyword::(Tok.Id name)::Tok.OpenParen::rest -> (Ast.CharType, Ast.ID(name), rest)
         | _ -> failwith("Parse error in parse_fun: bad function type or name") in
-    let fun_params, rest = parse_fun_params rest in
-    let fun_body, rest =
-        match rest with
-        | Tok.OpenBrace::rest -> parse_fun_body rest
-        | _ -> failwith("Expected brace to open function body") in
-    Ast.FunDecl(fun_type, fun_name, fun_params, fun_body), rest
+    let params, rest = parse_fun_params rest in
+    let body, rest = parse_block rest in
+    Ast.FunDecl { fun_type; name; params; body }, rest
 
 let rec parse_funs = function
     | [] -> [] (* no functions left to parse *)
@@ -308,4 +300,4 @@ let rec parse_funs = function
         let fs = parse_funs rest in
         f::fs
 
-let parse tokens = Ast.Prog(parse_funs tokens)
+let parse tokens = Ast.Prog (parse_funs tokens)

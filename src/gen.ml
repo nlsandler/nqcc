@@ -165,20 +165,10 @@ let generate filename prog =
 
     let rec generate_statement statement var_map current_scope stack_index =
         match statement with
-        | Ast.Decl(declaration) -> generate_declaration declaration var_map current_scope stack_index
-        | Ast.For _  -> begin
-            generate_for_loop statement var_map stack_index;
-            var_map, current_scope, stack_index
-        end
-        | Ast.ForDecl _  -> begin
-            generate_for_decl_loop statement var_map stack_index;
-            var_map, current_scope, stack_index
-        end
-        | Ast.Block statements -> begin
-            generate_statement_list statements var_map Set.empty stack_index;
-            var_map, current_scope, stack_index
-          end
-        | Ast.If(cond, body, else_body) ->
+        | Ast.For _  -> generate_for_loop statement var_map stack_index
+        | Ast.ForDecl _  -> generate_for_decl_loop statement var_map stack_index
+        | Ast.Block block -> generate_block var_map Set.empty stack_index block
+        | Ast.If { cond; if_body; else_body } ->
             (* TODO refactor this into own function *)
             (* evaluate condition *)
             let _ = generate_exp cond var_map in
@@ -190,7 +180,7 @@ let generate filename prog =
                 (* if cond is false, jump over if body *)
                 Printf.fprintf chan "    je      %s\n" post_if_label;
                 (* generate if body *)
-                generate_statement body var_map current_scope stack_index
+                generate_statement if_body var_map current_scope stack_index
               end in
             (match else_body with
             | Some else_statement ->
@@ -203,20 +193,16 @@ let generate filename prog =
                   (* now generate else statement *)
                   generate_statement else_statement var_map current_scope stack_index;
                   (* now print post-else label *)
-                  Printf.fprintf chan "%s:" post_else_label;
-                  var_map, current_scope, stack_index
+                  Printf.fprintf chan "%s:" post_else_label
                 end
             | None ->
                 (* print out label that comes after if statement *)
-                Printf.fprintf chan "%s:\n" post_if_label;
-                var_map, current_scope, stack_index)
-        | Ast.Exp(e) -> generate_exp e var_map; var_map, current_scope, stack_index
+                Printf.fprintf chan "%s:\n" post_if_label)
+        | Ast.Exp(e) -> generate_exp e var_map
         (* for return statements, variable map/stack index unchanged *)
         | Ast.ReturnVal exp ->
             let _ = generate_exp exp var_map in
-            let _ = emit_function_epilogue () in
-            var_map, current_scope, stack_index
-
+            emit_function_epilogue ()
 (*
     for (i = 0; i < 5; i = i + 1) {
         statements
@@ -276,37 +262,39 @@ _post_loop:
             Printf.fprintf chan "%s:\n" post_loop_label
         end
 
-    and generate_statement_list statements var_map current_scope stack_index =
-        match statements with
-        | stmt::stmts ->
-            let var_map', current_scope', stack_index' = generate_statement stmt var_map current_scope stack_index in
-            generate_statement_list stmts var_map' current_scope' stack_index'
-        | [] -> () in
+    and generate_block var_map current_scope stack_index = function
+      | [] -> ()
+      | (Ast.Statement s::block_items) -> begin
+          generate_statement s var_map current_scope stack_index;
+          generate_block var_map current_scope stack_index block_items
+        end
+      | (Ast.Decl d::block_items) ->
+         let var_map', current_scope', stack_index' = generate_declaration d var_map current_scope stack_index in
+         generate_block var_map' current_scope' stack_index' block_items
+    in
 
-    let generate_fun f =
-        match f with
-        | Ast.FunDecl(fun_type, Ast.ID(fun_name), fun_params, Ast.Body(statements)) ->
-            let _ = begin
-                Printf.fprintf chan "_%s:\n" fun_name;
-                Printf.fprintf chan "    push %%ebp\n";
-                Printf.fprintf chan "    movl %%esp, %%ebp\n"
-            end
-            in
-            (* arguments are just below return address, which is just below EBP, so first arg at ebp + 8
-                reverse fun_params b/c they go on stack right to left
-            *)
-            let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si + 4)) (Map.empty, 8) (List.rev fun_params) in
-            let _ = generate_statement_list statements var_map Set.empty (-4) in (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
-            (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
-            Printf.fprintf chan "    movl $0, %%eax\n";
-            emit_function_epilogue ()
-            in
+    let generate_fun (Ast.FunDecl { fun_type; name=Ast.ID fun_name; params; body }) =
+      let _ = begin
+          Printf.fprintf chan "_%s:\n" fun_name;
+          Printf.fprintf chan "    push %%ebp\n";
+          Printf.fprintf chan "    movl %%esp, %%ebp\n"
+        end
+      in
+      (* arguments are just below return address, which is just below EBP, so first arg at ebp + 8
+         reverse fun_params b/c they go on stack right to left
+       *)
+      let var_map, stack_index = List.fold_left (fun (m, si) (Ast.Param(_, Ast.ID(id))) -> (Map.add id si m, si + 4)) (Map.empty, 8) (List.rev params) in
+      let _ = generate_block var_map Set.empty (-4) body in (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
+      (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
+      Printf.fprintf chan "    movl $0, %%eax\n";
+      emit_function_epilogue ()
+    in
 
     let rec generate_funs = function
-        | [] -> ()
-        | f::fs -> generate_fun f; generate_funs fs  in
+      | [] -> ()
+      | f::fs -> generate_fun f; generate_funs fs  in
 
     match prog with
     | Ast.Prog fun_list ->
-        let _ = generate_funs fun_list in
-        close_out chan
+       let _ = generate_funs fun_list in
+       close_out chan

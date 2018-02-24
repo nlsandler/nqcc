@@ -39,10 +39,10 @@ let compare_declarations
 
 let rec compare_statements expected actual =
     match expected, actual with
-    | Ast.Decl(decl1), Ast.Decl(decl2) -> compare_declarations decl1 decl2
     | Ast.ReturnVal(v1), Ast.ReturnVal(v2) -> compare_exps v1 v2
-    | Ast.Block stmts1, Ast.Block stmts2 -> List.for_all2 compare_statements stmts1 stmts2
-    | Ast.If(cond1, then1, else1), Ast.If(cond2, then2, else2) ->
+    | Ast.Block stmts1, Ast.Block stmts2 -> List.for_all2 compare_block_items stmts1 stmts2
+    | Ast.If { cond=cond1; if_body=then1; else_body=else1 },
+      Ast.If { cond=cond2; if_body=then2; else_body=else2 } ->
         compare_exps cond1 cond2 && compare_statements then1 then2 &&
         (match else1, else2 with
         | Some body1, Some body2 -> compare_statements body1 body2
@@ -59,15 +59,24 @@ let rec compare_statements expected actual =
     | Ast.Exp(e1), Ast.Exp(e2) -> compare_exps e1 e2
     | _ -> false
 
+and compare_block_items expected actual =
+  match expected, actual with
+  | Ast.Statement s1, Ast.Statement s2 -> compare_statements s1 s2
+  | Ast.Decl d1, Ast.Decl d2 -> compare_declarations d1 d2
+  | _ -> false
+
 let compare_funs expected actual =
     match expected, actual with
-    | Ast.FunDecl(t1, name1, params1, Ast.Body(body1)), Ast.FunDecl(t2, name2, params2, Ast.Body(body2)) ->
-    t1 == t2 && compare_ids name1 name2 && List.for_all2 compare_params params1 params2 && List.for_all2 compare_statements body1 body2
+    | Ast.FunDecl { fun_type=t1; name=name1; params=params1; body=body1 }, Ast.FunDecl { fun_type=t2; name=name2; params=params2; body=body2 } ->
+       t1 == t2 && compare_ids name1 name2 && List.for_all2 compare_params params1 params2 && List.for_all2 compare_block_items body1 body2
 
 let compare_asts expected actual =
     match expected, actual with
     | Ast.Prog(fun_list1), Ast.Prog(fun_list2) -> List.for_all2 compare_funs fun_list1 fun_list2
 
+
+(* AST construction utilities *)
+let make_int i = Ast.(Const (Int i))
 
 (* Test utilities *)
 
@@ -92,32 +101,32 @@ let test_compare_asts tokens expected_ast test_ctxt =
     assert_bool "Mismatched ASTS" same
 
 (* ast with multiple statements *)
-let make_ast params statements =
-    let body = Ast.Body(statements) in
-    let fun_name = Ast.ID("main") in
-    let f = Ast.FunDecl(Ast.IntType, fun_name, params, body) in
+let make_ast params block_items =
+    let body = block_items in
+    let name = Ast.ID("main") in
+    let f = Ast.FunDecl { fun_type=Ast.IntType; name; params; body } in
     Ast.Prog([f])
 
 let make_simple_ast params exp =
     let ret = Ast.ReturnVal(exp) in
-    make_ast params [ret]
+    make_ast params [Ast.Statement ret]
 
 (* CONSTANTS *)
 
 let simple_token_list = Lex.lex "int main(){return 2;}"
-let simple_ast = make_simple_ast [] (Ast.Const(Ast.Int(2)))
+let simple_ast = make_simple_ast [] (make_int 2)
 
 (* TODO: this probably belongs in a different test group *)
 let fun_arg_token_list = Lex.lex "int main(int argc){return 2;}"
 let fun_arg_ast =
-    let params = [Ast.Param(Ast.IntType, Ast.ID("argc"))] in
-    let return_exp = Ast.Const(Ast.Int(2)) in
+    let params = [Ast.Param (Ast.IntType, Ast.ID "argc")] in
+    let return_exp = make_int 2 in
     make_simple_ast params return_exp
 
 let return_char_tokens = Lex.lex "int main(int argc){return 'a';}"
 let return_char_ast =
-    let params = [Ast.Param(Ast.IntType, Ast.ID("argc"))] in
-    let return_exp = Ast.Const(Ast.Char('a')) in
+    let params = [Ast.Param (Ast.IntType, Ast.ID "argc")] in
+    let return_exp = Ast.Const(Ast.Char 'a') in
     make_simple_ast params return_exp
 
 let basic_parse_tests = [
@@ -130,22 +139,22 @@ let basic_parse_tests = [
 
 let negation_tokens = Lex.lex "int main(){ return -3;}"
 let negation_ast =
-    let unop = Ast.UnOp(Ast.Negate, Ast.Const(Ast.Int(3))) in
+    let unop = Ast.UnOp (Ast.Negate, make_int 3) in
     make_simple_ast [] unop
 
 let pos_tokens = Lex.lex "int main() { return +3;}"
 let pos_ast =
-    let unop = Ast.UnOp(Ast.Pos, Ast.Const(Ast.Int(3))) in
+    let unop = Ast.UnOp (Ast.Pos, make_int 3) in
     make_simple_ast [] unop
 
 let complement_tokens = Lex.lex "int main() {return ~3;}"
 let complement_ast =
-    let unop = Ast.UnOp(Ast.Complement, Ast.Const(Ast.Int(3))) in
+    let unop = Ast.UnOp (Ast.Complement, make_int 3) in
     make_simple_ast [] unop
 
 let not_tokens = Lex.lex "int main() {return !4;}"
 let not_ast =
-    let unop = Ast.UnOp(Ast.Not, Ast.Const(Ast.Int(4))) in
+    let unop = Ast.UnOp (Ast.Not, make_int 4) in
     make_simple_ast [] unop
 
 let unop_parse_tests = [
@@ -159,80 +168,79 @@ let unop_parse_tests = [
 
 let addition_tokens = Lex.lex "int main(){return 1+2;}"
 let addition_ast =
-    let binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp (Ast.Add, make_int 1, make_int 2) in
     let params = [] in
     make_simple_ast params binop
 
 let subtraction_tokens = Lex.lex "int main(){return 4-3;}"
 let subtraction_ast =
-    let binop = Ast.BinOp(Ast.Sub, Ast.Const(Ast.Int(4)), Ast.Const(Ast.Int(3))) in
+    let binop = Ast.BinOp (Ast.Sub, make_int 4, make_int 3) in
     make_simple_ast [] binop
 
 let subtract_negative_tokens = Lex.lex "int main(){return 4- -3;}"
 let subtract_negative_ast =
-    let unop = Ast.UnOp(Ast.Negate, Ast.Const(Ast.Int(3))) in
-    let binop = Ast.BinOp(Ast.Sub, Ast.Const(Ast.Int(4)), unop) in
+    let unop = Ast.UnOp (Ast.Negate, make_int 3) in
+    let binop = Ast.BinOp (Ast.Sub, make_int 4, unop) in
     make_simple_ast [] binop
 
 let multi_addition_tokens = Lex.lex "int main() {return 1+2+3;}"
 let multi_addition_ast =
-    (* NOTE: this is actually wrong, addition in C is left-associative *)
-    let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
-    let outer_binop = Ast.BinOp(Ast.Add, inner_binop, Ast.Const(Ast.Int(3))) in
+    let inner_binop = Ast.BinOp(Ast.Add, make_int 1, make_int 2) in
+    let outer_binop = Ast.BinOp(Ast.Add, inner_binop, make_int 3) in
     let params = [] in
     make_simple_ast params outer_binop
 
 let division_tokens = Lex.lex "int main() {return 4/5;}"
 let division_ast =
-    let binop = Ast.BinOp(Ast.Div, Ast.Const(Ast.Int(4)), Ast.Const(Ast.Int(5))) in
+    let binop = Ast.BinOp(Ast.Div, make_int 4, make_int 5) in
     make_simple_ast [] binop
 
 let nested_addition_tokens = Lex.lex "int main(){return 1+(2+3);}"
 let nested_addition_ast =
-    let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(2)), Ast.Const(Ast.Int(3))) in
-    let outer_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), inner_binop) in
+    let inner_binop = Ast.BinOp(Ast.Add, make_int 2, make_int 3) in
+    let outer_binop = Ast.BinOp(Ast.Add, make_int 1, inner_binop) in
     make_simple_ast [] outer_binop
 
 let lots_of_parens_tokens = Lex.lex "int main(){return ((3));}"
-let lots_of_parens_ast = make_simple_ast [] (Ast.Const(Ast.Int(3)))
+let lots_of_parens_ast = make_simple_ast [] (make_int 3)
 
 let left_nested_addition_tokens = Lex.lex "int main() {return (1+2)+3;}"
 let left_nested_addition_ast =
-    let inner_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
-    let outer_binop = Ast.BinOp(Ast.Add, inner_binop, Ast.Const(Ast.Int(3))) in
+    let inner_binop = Ast.BinOp(Ast.Add, make_int 1, make_int 2) in
+    let outer_binop = Ast.BinOp(Ast.Add, inner_binop, make_int 3) in
     let params = [] in
     make_simple_ast params outer_binop
 
 let mult_tokens = Lex.lex "int main() {return 4*5;}"
 let mult_ast =
-    let binop = Ast.BinOp(Ast.Mult, Ast.Const(Ast.Int(4)), Ast.Const(Ast.Int(5))) in
+    let binop = Ast.BinOp(Ast.Mult, make_int 4, make_int 5) in
     make_simple_ast [] binop
 
 let lots_of_parens_add_tokens = Lex.lex "int main(){return ((1+2));}"
 let lots_of_parens_add_ast =
-    let e1 = Ast.Const(Ast.Int(1)) in
-    let e2 = Ast.Const(Ast.Int(2)) in
+    let e1 = make_int 1 in
+    let e2 = make_int 2 in
     let ret_exp = Ast.BinOp(Ast.Add, e1, e2) in
     make_simple_ast [] ret_exp
 
 let mod_toks = Lex.lex "int main() {return 3%2;}"
 let mod_ast =
-    let e1 = Ast.Const(Ast.Int(3)) in
-    let e2 = Ast.Const(Ast.Int(2)) in
+    let e1 = make_int 3 in
+    let e2 = make_int 2 in
     let ret_exp = Ast.BinOp(Ast.Mod, e1, e2) in
     make_simple_ast [] ret_exp
 
 let precedence_tokens = Lex.lex "int main() {return 1*2+3%2;}"
 let precedence_ast =
-    let e1 = Ast.BinOp(Ast.Mult, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
-    let e2 = Ast.BinOp(Ast.Mod, Ast.Const(Ast.Int(3)), Ast.Const(Ast.Int(2))) in
+    let e1 = Ast.BinOp(Ast.Mult, make_int 1, make_int 2) in
+    let e2 = Ast.BinOp(Ast.Mod, make_int 3, make_int 2) in
     let outer_binop = Ast.BinOp(Ast.Add, e1, e2) in
     make_simple_ast [] outer_binop
 
 let associativity_tokens = Lex.lex "int main() {return 1/2*3;}"
 let associativity_ast =
-    let inner_binop = Ast.BinOp(Ast.Div, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
-    let outer_binop = Ast.BinOp(Ast.Mult, inner_binop, Ast.Const(Ast.Int(3))) in
+    let inner_binop = Ast.BinOp(Ast.Div, make_int 1, make_int 2) in
+    let outer_binop = Ast.BinOp(Ast.Mult, inner_binop, make_int 3) in
     make_simple_ast [] outer_binop
 
 let binop_parse_tests = [
@@ -254,27 +262,27 @@ let binop_parse_tests = [
 
 let bitwise_and_tokens = Lex.lex "int main() {return 1&2;}"
 let bitwise_and_ast =
-    let binop = Ast.BinOp(Ast.BitAnd, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.BitAnd, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let bitwise_or_tokens = Lex.lex "int main() {return 1|2;}"
 let bitwise_or_ast =
-    let binop = Ast.BinOp(Ast.BitOr, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.BitOr, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let xor_tokens = Lex.lex "int main() {return 1^2;}"
 let xor_ast =
-    let binop = Ast.BinOp(Ast.Xor, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.Xor, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let shiftl_tokens = Lex.lex "int main() {return 1<<2;}"
 let shiftl_ast =
-    let binop = Ast.BinOp(Ast.ShiftL, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.ShiftL, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let shiftr_tokens = Lex.lex "int main() {return 1>>2;}"
 let shiftr_ast =
-    let binop = Ast.BinOp(Ast.ShiftR, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.ShiftR, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let bitwise_binops_tests = [
@@ -289,20 +297,20 @@ let bitwise_binops_tests = [
 
 let and_tokens = Lex.lex "int main() {return 1&&2;}"
 let and_ast =
-    let binop = Ast.BinOp(Ast.And, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.And, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let or_tokens = Lex.lex "int main() {return 1||2;}"
 let or_ast =
-    let binop = Ast.BinOp(Ast.Or, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.Or, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 (* addition is higher precedence than &&, which is higher precedence than || *)
 let bool_precedence_tokens = Lex.lex "int main() {return 1 || 2 && 3 + 4;}"
 let bool_precedence_ast =
-    let add_binop = Ast.BinOp(Ast.Add, Ast.Const(Ast.Int(3)), Ast.Const(Ast.Int(4))) in
-    let and_binop = Ast.BinOp(Ast.And, Ast.Const(Ast.Int(2)), add_binop) in
-    let or_binop = Ast.BinOp(Ast.Or, Ast.Const(Ast.Int(1)), and_binop) in
+    let add_binop = Ast.BinOp(Ast.Add, make_int 3, make_int 4) in
+    let and_binop = Ast.BinOp(Ast.And, make_int 2, add_binop) in
+    let or_binop = Ast.BinOp(Ast.Or, make_int 1, and_binop) in
     make_simple_ast [] or_binop
 
 let boolean_binop_tests = [
@@ -316,32 +324,32 @@ let boolean_binop_tests = [
 
 let compare_eq_tokens = Lex.lex "int main() {return 1==2;}"
 let compare_eq_ast =
-    let binop = Ast.BinOp(Ast.Eq, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.Eq, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let compare_neq_tokens = Lex.lex "int main() {return 1!=2;}"
 let compare_neq_ast =
-    let binop = Ast.BinOp(Ast.Neq, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.Neq, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let compare_gt_tokens = Lex.lex "int main() {return 1 > 2;}"
 let compare_gt_ast =
-    let binop = Ast.BinOp(Ast.Gt, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.Gt, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let compare_ge_tokens = Lex.lex "int main() {return 1 >= 2;}"
 let compare_ge_ast =
-    let binop = Ast.BinOp(Ast.Ge, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.Ge, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let compare_lt_tokens = Lex.lex "int main() {return 1 < 2;}"
 let compare_lt_ast =
-    let binop = Ast.BinOp(Ast.Lt, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.Lt, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let compare_le_tokens = Lex.lex "int main() {return 1 <= 2;}"
 let compare_le_ast =
-    let binop = Ast.BinOp(Ast.Le, Ast.Const(Ast.Int(1)), Ast.Const(Ast.Int(2))) in
+    let binop = Ast.BinOp(Ast.Le, make_int 1, make_int 2) in
     make_simple_ast [] binop
 
 let comp_parse_tests = [
@@ -362,7 +370,7 @@ let declaration_ast =
                            init = Some(Const(Int 2));
                           })
     in
-    let ret = Ast.ReturnVal(Ast.Var(Ast.ID("a"))) in
+    let ret = Ast.Statement (Ast.ReturnVal(Ast.Var(Ast.ID "a"))) in
     let statements = [decl; ret] in
     make_ast [] statements
 
@@ -373,23 +381,23 @@ let assignment_ast =
                            init = None;
         })
     in
-    let assign = Ast.Exp(Ast.Assign(Ast.Equals, Ast.ID("a"), Ast.Const(Ast.Int(2)))) in
-    let ret = Ast.ReturnVal(Ast.Const(Ast.Int(0))) in
-    let statements = [decl; assign; ret] in
-    make_ast [] statements
+    let assign = Ast.Statement (Ast.Exp (Ast.Assign (Ast.Equals, Ast.ID "a", make_int 2))) in
+    let ret = Ast.Statement (Ast.ReturnVal (make_int 0)) in
+    let block_items = [decl; assign; ret] in
+    make_ast [] block_items
 
 let multi_assign_tokens = Lex.lex "int main(){int a; int b = a = 2; return b;}"
 let multi_assign_ast =
     let decl_1 = Ast.(Decl { var_type = IntType;
-                             var_name = Ast.ID("a");
+                             var_name = ID("a");
                              init = None
                          }) in
-    let assign = Ast.Assign(Ast.Equals, Ast.ID("a"), Ast.Const(Ast.Int(2))) in
+    let assign = Ast.(Assign (Equals, ID("a"), make_int 2)) in
     let decl_2 = Ast.(Decl { var_type = IntType;
-                             var_name = Ast.ID("b");
-                             init = Some(assign)
+                             var_name = ID("b");
+                             init = Some assign
                          }) in
-    let ret = Ast.ReturnVal(Ast.Var(Ast.ID("b"))) in
+    let ret = Ast.(Statement (ReturnVal (Var (ID "b")))) in
     let statements = [decl_1; decl_2; ret] in
     make_ast [] statements
 
@@ -404,18 +412,18 @@ let variable_parse_tests = [
 
 let single_if_tokens = Lex.lex "int main(){if (0) return 1; return 0;}"
 let single_if_ast =
-    let if_condition = Ast.Const(Ast.Int(0)) in
-    let if_body = Ast.ReturnVal(Ast.Const(Ast.Int(1))) in
-    let if_statement = Ast.If(if_condition, if_body, None) in
-    let return = Ast.ReturnVal(Ast.Const(Ast.Int(0))) in
+    let cond = make_int 0 in
+    let if_body = Ast.ReturnVal(make_int 1) in
+    let if_statement = Ast.(Statement (If { cond; if_body; else_body=None })) in
+    let return = Ast.(Statement (ReturnVal(make_int 0))) in
     make_ast [] [if_statement; return]
 
 let single_if_else_tokens = Lex.lex "int main(){if (0) return 1; else return 2;}"
 let single_if_else_ast =
-    let if_condition = Ast.Const(Ast.Int(0)) in
-    let if_body = Ast.ReturnVal(Ast.Const(Ast.Int(1))) in
-    let else_body =  Ast.ReturnVal(Ast.Const(Ast.Int(2))) in
-    let if_statement = Ast.If(if_condition, if_body, Some(else_body)) in
+    let cond = make_int 0 in
+    let if_body = Ast.ReturnVal(make_int 1) in
+    let else_body =  Some (Ast.ReturnVal(make_int 2)) in
+    let if_statement = Ast.(Statement (If { cond; if_body; else_body })) in
     make_ast [] [if_statement]
 
 let ternary_tokens = Lex.lex "int main(){ return 3 < 4 ? 5 : 6; }"
@@ -438,8 +446,8 @@ let conditional_parse_tests = [
 
 let for_tokens = Lex.lex "int main() {for(1; 1; 1) { 1;}}"
 let for_ast =
-    let const = Ast.Const(Ast.Int(1)) in
-    let for_loop = Ast.For { init=const; cond=const; post=const; body=Ast.Block [Ast.Exp const] } in
+    let const = make_int 1 in
+    let for_loop = Ast.(Statement (For { init=const; cond=const; post=const; body=Block [(Statement (Exp const))] })) in
     make_ast [] [for_loop]
 
 let for_compound_tokens = Lex.lex "int main() {int a; for(a=0; a<5; a=a+1){ 1+1; if(a<5) {return 3;} } }"
@@ -449,26 +457,28 @@ let for_compound_ast =
     let init = Assign(Equals, ID("a"), Const(Int 0)) in
     let post = Assign(Equals, ID("a"), BinOp(Add, Var(ID "a"), Const (Int 1))) in
     let cond = BinOp(Lt, Var(ID("a")), Const(Int 5)) in
-    let exp = Exp(BinOp(Add, Const(Int 1), Const(Int 1))) in
-    let return = ReturnVal(Const(Int 3)) in
-    let if_statement = If(cond, Ast.Block [return], None) in
+    let exp = Statement (Exp(BinOp(Add, Const(Int 1), Const(Int 1)))) in
+    let return = Statement (ReturnVal(make_int 3)) in
+    let if_statement = Statement (If { cond; if_body=Ast.Block [return]; else_body=None }) in
     let body = Block [exp; if_statement] in
-    let for_loop = For { init; cond; post; body } in
+    let for_loop = Statement (For { init; cond; post; body }) in
     make_ast [] [decl; for_loop]
 
 let for_declaration_tokens = Lex.lex "int main() {for(int a; 1; 1) { 1;}}"
 let for_decl_ast =
-    let const = Ast.Const(Ast.Int(1)) in
-    let decl = Ast.({ var_type = IntType; var_name = ID("a"); init = None}) in
-    let for_loop = Ast.ForDecl { init=decl; cond=const; post=const; body=Ast.Block [Ast.Exp const] } in
-    make_ast [] [for_loop]
+  let open Ast in
+  let const = make_int 1 in
+  let decl = { var_type = IntType; var_name = ID("a"); init = None} in
+  let for_loop = Statement (ForDecl { init=decl; cond=const; post=const; body=Block [Statement (Exp const)] }) in
+  make_ast [] [for_loop]
 
 let single_for_tokens = Lex.lex "int main() {for(1; 1; 1) if (1) 1;}"
 let single_for_ast =
-    let const = Ast.Const(Ast.Int(1)) in
-    let if_statement = Ast.If(const, Ast.Exp const, None) in
-    let for_loop = Ast.For { init=const; cond=const; post=const; body=if_statement } in
-    make_ast [] [for_loop]
+  let open Ast in
+  let const = make_int 1 in
+  let if_statement = If { cond=const; if_body=Exp const; else_body=None } in
+  let for_loop = For { init=const; cond=const; post=const; body=if_statement } in
+  make_ast [] [Statement for_loop]
 
 let for_parse_tests = [
     "test_for" >:: test_compare_asts for_tokens for_ast;
@@ -485,12 +495,12 @@ let fun_ast =
 
 let fun_args_tokens = Lex.lex "int main() { return foo(5); }"
 let fun_args_ast =
-    let fun_call = Ast.FunCall(Ast.ID("foo"), [Ast.Const(Ast.Int(5))]) in
+    let fun_call = Ast.FunCall(Ast.ID("foo"), [make_int 5]) in
     make_simple_ast [] fun_call
 
 let fun_arg_exp_tokens = Lex.lex "int main() { return foo(a + 5); }"
 let fun_arg_exp_ast =
-    let arg_exp = Ast.BinOp(Ast.Add, Ast.Var(Ast.ID("a")), Ast.Const(Ast.Int(5))) in
+    let arg_exp = Ast.BinOp(Ast.Add, Ast.Var(Ast.ID("a")), make_int 5) in
     let fun_call = Ast.FunCall(Ast.ID("foo"), [arg_exp]) in
     make_simple_ast [] fun_call
 
@@ -515,10 +525,10 @@ let backwards_parens = Lex.lex "int main() {return )1+2;}"
 
 let failure_parse_tests = [
     "test_parse_fail" >:: test_expect_failure bad_token_list "Parse error in parse_fun: bad function type or name";
-    "test_semicolon_required" >:: test_expect_failure missing_semicolon "Expected semicolon at end of statement";
+    "test_semicolon_required" >:: test_expect_failure missing_semicolon "Expected semicolon after return statement";
     "test_incomplete_addition" >:: test_expect_failure incomplete_addition "Failed to parse factor";
     "test_mismatched_parens" >:: test_expect_failure mismatched_parens "Syntax error: expected close paren";
-    "test_mismatched_right_parens" >:: test_expect_failure mismatched_right_parens "Expected semicolon at end of statement";
+    "test_mismatched_right_parens" >:: test_expect_failure mismatched_right_parens "Expected semicolon after return statement";
     "test_one_paren" >:: test_expect_failure one_paren "Syntax error: expected close paren";
     "test_backwards_parens" >:: test_expect_failure backwards_parens "Failed to parse factor";
 ]
