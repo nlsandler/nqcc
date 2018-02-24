@@ -58,6 +58,7 @@ let rec exp_to_string = function
     | Ast.FunCall(fun_id, args) -> Printf.sprintf "%s(%s)" (id_to_string fun_id) (args_to_string args)
     | Ast.Assign(op, Ast.ID(var_name), rhs) ->
         Printf.sprintf "%s %s %s\n" var_name (assign_op_to_string op) (exp_to_string rhs)
+    | Ast.NullExp -> ""
 
 and args_to_string args =
     let arg_strings = List.map exp_to_string args in

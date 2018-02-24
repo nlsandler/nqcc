@@ -30,13 +30,14 @@ type assign_op =
 type unop = Negate | Pos | Complement | Not
 type id = ID of string
 type exp =
-    | Const of const
-    | Var of id
-    | UnOp of unop * exp
-    | BinOp of binop * exp * exp
-    | TernOp of exp * exp * exp
-    | Assign of assign_op * id * exp
-    | FunCall of id * exp list
+  | NullExp
+  | Const of const
+  | Var of id
+  | UnOp of unop * exp
+  | BinOp of binop * exp * exp
+  | TernOp of exp * exp * exp
+  | Assign of assign_op * id * exp
+  | FunCall of id * exp list
 type declaration =
     { var_type: type_def;
       var_name: id;

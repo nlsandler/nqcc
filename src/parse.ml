@@ -247,6 +247,7 @@ and parse_for_statement = function
 
 (* TODO: actually pay attention to types *)
 and parse_statement = function
+  | Tok.Semicolon::rest -> Ast.Exp Ast.NullExp, rest
   | (Tok.OpenBrace::_) as tokens ->
      let block, rest = parse_block tokens in
      Block block, rest

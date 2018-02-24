@@ -37,6 +37,7 @@ let generate filename prog =
     (* generate code to execute expression and move result into eax *)
     let rec generate_exp exp var_map =
         match exp with
+        | Ast.NullExp -> ()
         | Ast.Assign(Ast.Equals, (Ast.ID id), exp) ->
             let _ = generate_exp exp var_map in
             (* get location of variable on stack *)
