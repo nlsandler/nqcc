@@ -181,7 +181,7 @@ let generate filename prog =
                 (* if cond is false, jump over if body *)
                 Printf.fprintf chan "    je      %s\n" post_if_label;
                 (* generate if body *)
-                generate_statement if_body var_map current_scope stack_index
+                generate_statement if_body var_map Set.empty stack_index
               end in
             (match else_body with
             | Some else_statement ->
@@ -192,7 +192,7 @@ let generate filename prog =
                   (* now print out label after if statement *)
                   Printf.fprintf chan "%s:\n" post_if_label;
                   (* now generate else statement *)
-                  generate_statement else_statement var_map current_scope stack_index;
+                  generate_statement else_statement var_map Set.empty stack_index;
                   (* now print post-else label *)
                   Printf.fprintf chan "%s:" post_else_label
                 end
