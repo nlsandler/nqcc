@@ -147,7 +147,7 @@ and parse_ternary_exp toks =
         begin
         match rest with
         | Tok.Colon::branch2_tokens ->
-            let branch2, rest = parse_exp branch2_tokens in
+            let branch2, rest = parse_ternary_exp branch2_tokens in
             Ast.TernOp (exp_1, branch1, branch2), rest
         | _ -> failwith("Expected colon after ternary operator")
         end
