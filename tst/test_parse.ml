@@ -487,6 +487,42 @@ let for_parse_tests = [
     "test_single_for" >:: test_compare_asts single_for_tokens single_for_ast
   ]
 
+(* WHILE & DO-WHILE LOOPS *)
+let while_tokens = Lex.lex "int main() { while (1) 2; }"
+let while_ast =
+  let cond = make_int 1 in
+  let body = Exp (make_int 2) in
+  let while_statement = Statement (While { cond; body }) in
+  make_ast [] [while_statement]
+
+let while_block_tokens = Lex.lex "int main() { while (1) {2;} }"
+let while_block_ast =
+  let cond = make_int 1 in
+  let body = Statement (Exp (make_int 2)) in
+  let while_statement = Statement (While { cond; body=Block [body] }) in
+  make_ast [] [while_statement]
+
+let do_while_tokens = Lex.lex "int main() { do 2; while (1) }"
+let do_while_ast =
+  let cond = make_int 1 in
+  let body = Exp (make_int 2) in
+  let do_while_statement = Statement (DoWhile { body; cond }) in
+  make_ast [] [do_while_statement]
+
+let do_while_block_tokens = Lex.lex "int main() { do { 2; } while (1) }"
+let do_while_block_ast =
+  let cond = make_int 1 in
+  let body = Statement (Exp (make_int 2)) in
+  let do_while_statement = Statement (DoWhile { body=Block [body]; cond }) in
+  make_ast [] [do_while_statement]
+
+let while_parse_tests = [
+    "test_while" >:: test_compare_asts while_tokens while_ast;
+    "test_while_block" >:: test_compare_asts while_block_tokens while_block_ast;
+    "test_do_while" >:: test_compare_asts do_while_tokens do_while_ast;
+    "test_do_while_block" >:: test_compare_asts do_while_block_tokens do_while_block_ast
+  ]
+
 (* FUNCTION CALLS *)
 let fun_tokens = Lex.lex "int main() { return foo(); }" (* note: call to undefined function should fail during code generation, not parsing *)
 let fun_ast =
@@ -533,8 +569,7 @@ let failure_parse_tests = [
     "test_backwards_parens" >:: test_expect_failure backwards_parens "Failed to parse factor";
   ]
 
-(* TODO: add comp parse test *)
-let parse_tests = basic_parse_tests@unop_parse_tests@binop_parse_tests@boolean_binop_tests
-                  @bitwise_binops_tests@comp_parse_tests@variable_parse_tests
-                  @conditional_parse_tests@fun_call_parse_tests@for_parse_tests
-                  @failure_parse_tests
+let parse_tests = basic_parse_tests@unop_parse_tests@binop_parse_tests
+                  @boolean_binop_tests@bitwise_binops_tests@comp_parse_tests
+                  @variable_parse_tests@conditional_parse_tests@fun_call_parse_tests
+                  @for_parse_tests@while_parse_tests@failure_parse_tests

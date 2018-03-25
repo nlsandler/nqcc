@@ -252,11 +252,24 @@ and parse_for_statement = function
      end
   | _ -> failwith "PANIC: expected open paren at start of for loop"
 
+and parse_while_statement toks =
+  let cond, rest = parse_exp toks in
+  let body, rest = parse_statement rest in
+  Ast.While { cond; body }, rest
+
+and parse_do_while_statement toks =
+  let body, rest = parse_statement toks in
+  match rest with
+  | Tok.WhileKeyword::cond_tokens ->
+     let cond, rest = parse_exp cond_tokens in
+     Ast.DoWhile { body; cond }, rest
+  | _ -> failwith "Expected 'while' after body of do-while"
+
 (* TODO: actually pay attention to types *)
 and parse_statement toks =
   let open Tok in
   match toks with
-  | Semicolon::rest -> Ast.(Exp NullExp), rest
+  | Semicolon::rest -> Ast.Exp NullExp, rest
   | OpenBrace::_ ->
      let block, rest = parse_block toks in
      Block block, rest
@@ -269,6 +282,8 @@ and parse_statement toks =
        | Semicolon::rest -> statement, rest
        | _ -> failwith "Expected semicolon after return statement"
      end
+  | WhileKeyword::tokens -> parse_while_statement tokens
+  | DoKeyword::tokens -> parse_do_while_statement tokens
   | _ ->
      let exp, rest = parse_exp toks in
      begin
