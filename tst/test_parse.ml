@@ -57,6 +57,12 @@ let rec compare_statements expected actual =
     ForDecl { init = init2; cond = cond2; post = post2; body = body2; } ->
      compare_declarations init1 init2 && compare_exps cond1 cond2 &&
        compare_exps post1 post2 && compare_statements body1 body2
+  | While { cond = cond1; body = body1 },
+    While { cond = cond2; body = body2 } ->
+     compare_exps cond1 cond2 && compare_statements body1 body2
+  | DoWhile { cond = cond1; body = body1 },
+    DoWhile { cond = cond2; body = body2 } ->
+     compare_exps cond1 cond2 && compare_statements body1 body2
   | Exp e1, Exp e2 -> compare_exps e1 e2
   | _ -> false
 

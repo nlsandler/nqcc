@@ -37,6 +37,56 @@ let generate filename prog =
       print_asm "    ret\n"
     end in
 
+  let emit_bin_op op =
+    let open Ast in
+    match op with
+    | Div ->
+       (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
+       begin
+         print_asm "    xor %%edx, %%edx\n";
+         print_asm "    idivl %%ecx\n";
+       end
+    | Mod ->
+       (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
+       begin
+         print_asm "    xor %%edx, %%edx\n";
+         print_asm "    idivl %%ecx\n";
+         (* remainder stored in edx, move it to eax *)
+         print_asm "    movl %%edx, %%eax\n"
+       end
+    | Sub -> print_asm "    subl %%ecx, %%eax\n"
+    | Add -> print_asm "    addl %%ecx, %%eax\n";
+    | Mult -> print_asm "    imul %%ecx, %%eax\n";
+    | Xor -> print_asm "    xor %%ecx, %%eax\n";
+    | BitAnd -> print_asm "    and %%ecx, %%eax\n";
+    | BitOr -> print_asm "    or %%ecx, %%eax\n";
+    | ShiftL -> print_asm "    sall %%cl, %%eax\n";
+    | ShiftR -> print_asm "    sarl %%cl, %%eax\n";
+    | Eq -> emit_comparison "sete"
+    | Neq -> emit_comparison "setne"
+    | Lt -> emit_comparison "setl"
+    | Le -> emit_comparison "setle"
+    | Gt -> emit_comparison "setg"
+    | Ge -> emit_comparison "setge"
+    | Or ->
+       begin
+         print_asm "    orl %%eax, %%ecx\n";
+         print_asm "    movl $0, %%eax\n";
+         print_asm "    setne %%al\n"
+       end
+    | And ->
+       begin
+         (* if eax != 0, set al = 1 *)
+         print_asm "    cmp $0, %%eax\n";
+         print_asm "    movl $0, %%eax\n"; (* zero this b/c we'll store result in it*)
+         print_asm "    setne %%al\n";
+         (* if ecx != 0, set cl = 1 *)
+         print_asm "    cmp $0, %%ecx\n";
+         print_asm "    setne %%cl\n";
+         (* eax = al && cl *)
+         print_asm "    andb %%cl, %%al\n"
+       end in
+
   (* generate code to execute expression and move result into eax *)
   let rec generate_exp exp var_map =
     let open Ast in
@@ -52,8 +102,6 @@ let generate filename prog =
        let post_tern_label = Util.unique_id "post_ternary" in
        let e3_label = Util.unique_id "second_branch_label" in
        begin
-         (* TODO: refactor? this is a lot like 'if' *)
-
          (* calculate cond *)
          generate_exp e1 var_map;
          (* is cond true? *)
@@ -82,53 +130,7 @@ let generate filename prog =
          (* Put e1 in eax (where it needs to be for idiv) *)
          print_asm  "    pop %%eax\n";
          (* perform operation *)
-         match op with
-         | Div ->
-            (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
-            begin
-              print_asm "    xor %%edx, %%edx\n";
-              print_asm "    idivl %%ecx\n";
-            end
-         | Mod ->
-            (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
-            begin
-              print_asm "    xor %%edx, %%edx\n";
-              print_asm "    idivl %%ecx\n";
-              (* remainder stored in edx, move it to eax *)
-              print_asm "    movl %%edx, %%eax\n"
-            end
-         | Sub -> print_asm "    subl %%ecx, %%eax\n"
-         | Add -> print_asm "    addl %%ecx, %%eax\n";
-         | Mult -> print_asm "    imul %%ecx, %%eax\n";
-         | Xor -> print_asm "    xor %%ecx, %%eax\n";
-         | BitAnd -> print_asm "    and %%ecx, %%eax\n";
-         | BitOr -> print_asm "    or %%ecx, %%eax\n";
-         | ShiftL -> print_asm "    sall %%cl, %%eax\n";
-         | ShiftR -> print_asm "    sarl %%cl, %%eax\n";
-         | Eq -> emit_comparison "sete"
-         | Neq -> emit_comparison "setne"
-         | Lt -> emit_comparison "setl"
-         | Le -> emit_comparison "setle"
-         | Gt -> emit_comparison "setg"
-         | Ge -> emit_comparison "setge"
-         | Or ->
-            begin
-              print_asm "    orl %%eax, %%ecx\n";
-              print_asm "    movl $0, %%eax\n";
-              print_asm "    setne %%al\n"
-            end
-         | And ->
-            begin
-              (* if eax != 0, set al = 1 *)
-              print_asm "    cmp $0, %%eax\n";
-              print_asm "    movl $0, %%eax\n"; (* zero this b/c we'll store result in it*)
-              print_asm "    setne %%al\n";
-              (* if ecx != 0, set cl = 1 *)
-              print_asm "    cmp $0, %%ecx\n";
-              print_asm "    setne %%cl\n";
-              (* eax = al && cl *)
-              print_asm "    andb %%cl, %%al\n"
-            end
+         emit_bin_op op
        end
     | UnOp (op, e) ->
        generate_exp e var_map;
@@ -188,38 +190,7 @@ let generate filename prog =
     | For _  -> generate_for_loop statement var_map stack_index
     | ForDecl _  -> generate_for_decl_loop statement var_map stack_index
     | Block block -> generate_block var_map Set.empty stack_index block
-    | If { cond; if_body; else_body } ->
-       (* TODO refactor this into own function *)
-       (* evaluate condition *)
-       let _ = generate_exp cond var_map in
-       let post_if_label = Util.unique_id "post_if" in
-       let _ = begin
-           (* stuff that's the same whether or not there's an else block *)
-           (* compare cond to false *)
-           print_asm "    cmp     $0, %%eax\n";
-           (* if cond is false, jump over if body *)
-           Printf.fprintf chan "    je      %s\n" post_if_label;
-           (* generate if body *)
-           generate_statement if_body var_map Set.empty stack_index
-         end in
-       begin
-         match else_body with
-         | Some else_statement ->
-            let post_else_label = Util.unique_id "post_else" in
-            begin
-              (* We're at end of if statement, need to jump over the else statement *)
-              Printf.fprintf chan "    jmp     %s\n" post_else_label;
-              (* now print out label after if statement *)
-              Printf.fprintf chan "%s:\n" post_if_label;
-              (* now generate else statement *)
-              generate_statement else_statement var_map Set.empty stack_index;
-              (* now print post-else label *)
-              Printf.fprintf chan "%s:" post_else_label
-            end
-         | None ->
-            (* print out label that comes after if statement *)
-            Printf.fprintf chan "%s:\n" post_if_label
-       end
+    | If _ -> generate_if statement var_map current_scope stack_index
     | Exp e -> generate_exp e var_map
     (* for return statements, variable map/stack index unchanged *)
     | ReturnVal exp ->
@@ -241,43 +212,31 @@ _post_loop:
     ...
 
    *)
+
   and generate_for_loop Ast.(For { init ; cond ; post ; body }) var_map stack_index =
+    begin
+      generate_exp init var_map;
+      for_helper cond post body var_map stack_index
+    end
+
+  and generate_for_decl_loop Ast.(ForDecl { init ; cond ; post ; body }) var_map stack_index =
+    (* add variable - for loop is new scope*)
+    let var_map', _, stack_index' = generate_declaration init var_map Set.empty stack_index in
+    for_helper cond post body var_map' stack_index'
+
+  and for_helper cond post body var_map stack_index =
     let loop_label = Util.unique_id "loop" in
     let post_loop_label = Util.unique_id "post_loop" in
     begin
-      (* evaluate init expression *)
-      generate_exp init var_map;
       Printf.fprintf chan "%s:\n" loop_label;
       generate_exp cond var_map;
       (* jump after loop if cond is false *)
       print_asm "    cmp $0, %%eax\n";
       Printf.fprintf chan "    je %s\n" post_loop_label;
-      (* evaluate loop body - new scope, so current_scope set is empty *)
+      (* evaluate loop body, which is a new scope *)
       generate_statement body var_map Set.empty stack_index;
       (* evaluate post expression *)
       generate_exp post var_map;
-      (* execute loop again *)
-      Printf.fprintf chan "    jmp %s\n" loop_label;
-      (* label end of loop *)
-      Printf.fprintf chan "%s:\n" post_loop_label
-    end
-
-  (* TODO: refactor for_loop functions, they're almost identical *)
-  and generate_for_decl_loop Ast.(ForDecl { init ; cond ; post ; body }) var_map stack_index =
-    let loop_label = Util.unique_id "loop" in
-    let post_loop_label = Util.unique_id "post_loop" in
-    (* add variable - for loop is new scope*)
-    let var_map', _, stack_index' = generate_declaration init var_map Set.empty stack_index in
-    begin
-      Printf.fprintf chan "%s:\n" loop_label;
-      generate_exp cond var_map';
-      (* jump after loop if cond is false *)
-      print_asm "    cmp $0, %%eax\n";
-      Printf.fprintf chan "    je %s\n" post_loop_label;
-      (* evaluate loop body, which is a new scope *)
-      generate_statement body var_map' Set.empty stack_index';
-      (* evaluate post expression *)
-      generate_exp post var_map';
       (* execute loop again *)
       Printf.fprintf chan "    jmp %s\n" loop_label;
       (* label end of loop *)
@@ -293,6 +252,39 @@ _post_loop:
     | Ast.Decl d::block_items ->
        let var_map', current_scope', stack_index' = generate_declaration d var_map current_scope stack_index in
        generate_block var_map' current_scope' stack_index' block_items
+
+  and generate_if Ast.(If { cond; if_body; else_body }) var_map current_scope stack_index =
+    (* evaluate condition *)
+    let _ = generate_exp cond var_map in
+    let post_if_label = Util.unique_id "post_if" in
+    let _ = begin
+        (* stuff that's the same whether or not there's an else block *)
+        (* compare cond to false *)
+        print_asm "    cmp     $0, %%eax\n";
+        (* if cond is false, jump over if body *)
+        Printf.fprintf chan "    je      %s\n" post_if_label;
+        (* generate if body *)
+        generate_statement if_body var_map Set.empty stack_index
+      end in
+    begin
+      match else_body with
+      (* handle else, if present *)
+      | Some else_statement ->
+         let post_else_label = Util.unique_id "post_else" in
+         begin
+           (* We're at end of if statement, need to jump over the else statement *)
+           Printf.fprintf chan "    jmp     %s\n" post_else_label;
+           (* now print out label after if statement *)
+           Printf.fprintf chan "%s:\n" post_if_label;
+           (* now generate else statement *)
+           generate_statement else_statement var_map Set.empty stack_index;
+           (* now print post-else label *)
+           Printf.fprintf chan "%s:" post_else_label
+         end
+      | None ->
+         (* print out label that comes after if statement *)
+         Printf.fprintf chan "%s:\n" post_if_label
+    end
   in
 
   let generate_fun Ast.(FunDecl { fun_type; name=ID fun_name; params; body }) =
