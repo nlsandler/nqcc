@@ -1,32 +1,32 @@
 (* Data types representing an abstract syntax tree *)
 type const =
-    | Int of int
-    | Char of char
-    | String of string
+  | Int of int
+  | Char of char
+  | String of string
 type type_def =
-    | IntType
-    | CharType
+  | IntType
+  | CharType
 type binop =
-    | Add
-    | Sub
-    | Mult
-    | Div
-    | Mod
-    | Lt
-    | Gt
-    | Le
-    | Ge
-    | Neq
-    | Eq
-    | And
-    | Or
-    | BitAnd
-    | BitOr
-    | Xor
-    | ShiftL
-    | ShiftR
+  | Add
+  | Sub
+  | Mult
+  | Div
+  | Mod
+  | Lt
+  | Gt
+  | Le
+  | Ge
+  | Neq
+  | Eq
+  | And
+  | Or
+  | BitAnd
+  | BitOr
+  | Xor
+  | ShiftL
+  | ShiftR
 type assign_op =
-    | Equals (* = *)
+  | Equals (* = *)
 type unop = Negate | Pos | Complement | Not
 type id = ID of string
 type exp =
@@ -39,21 +39,21 @@ type exp =
   | Assign of assign_op * id * exp
   | FunCall of id * exp list
 type declaration =
-    { var_type: type_def;
-      var_name: id;
-      init: exp option;
-    }
+  { var_type: type_def;
+    var_name: id;
+    init: exp option;
+  }
 type block_item =
-    | Statement of statement
-    | Decl of declaration
+  | Statement of statement
+  | Decl of declaration
 and block = block_item list
 and statement =
-    | Block of block
-    | If of {cond: exp; if_body: statement; else_body: statement option}
-    | Exp of exp
-    | For of {init: exp; cond: exp; post: exp; body: statement}
-    | ForDecl of {init: declaration; cond: exp; post: exp; body: statement}
-    | ReturnVal of exp (* should we add a return_exp instead? *)
+  | Block of block
+  | If of {cond: exp; if_body: statement; else_body: statement option}
+  | Exp of exp
+  | For of {init: exp; cond: exp; post: exp; body: statement}
+  | ForDecl of {init: declaration; cond: exp; post: exp; body: statement}
+  | ReturnVal of exp (* should we add a return_exp instead? *)
 type fun_param = Param of type_def * id
 type fun_decl =
   FunDecl of { fun_type: type_def;
