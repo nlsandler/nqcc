@@ -1,5 +1,5 @@
 for i in examples/*/*.c
-do  
+do
     gcc -w -m32 $i             #compile with gcc
     ./a.out                 #run it
     expected=$?             #get exit code

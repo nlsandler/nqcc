@@ -28,7 +28,7 @@ Executable "test_nqcc"
     MainIs: test_nqcc.ml
     Build$: flag(tests)
     Install: false
-    BuildDepends: 
+    BuildDepends:
         oUnit, nqcc_lib
 
 Test "test_nqcc"
