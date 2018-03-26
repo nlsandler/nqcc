@@ -29,6 +29,12 @@ let rec compare_exps expected actual =
      compare_exps expected_1 actual_1 && compare_exps expected_2 actual_2 && compare_exps expected_3 actual_3
   | _ -> false
 
+let compare_optional_exps expected actual =
+  match expected, actual with
+  | None, None -> true
+  | Some e1, Some e2 -> compare_exps e1 e2
+  | _ -> false
+
 let compare_declarations
       { var_type = t1; var_name = id1; init = init1; }
       { var_type = t2; var_name = id2; init = init2; } =
@@ -51,19 +57,19 @@ let rec compare_statements expected actual =
         | _ -> false)
   | For { init = init1; cond = cond1; post = post1; body = body1; },
     For { init = init2; cond = cond2; post = post2; body = body2; } ->
-     compare_exps init1 init2 && compare_exps cond1 cond2 &&
-       compare_exps post1 post2 && compare_statements body1 body2
+     compare_optional_exps init1 init2 && compare_exps cond1 cond2 &&
+       compare_optional_exps post1 post2 && compare_statements body1 body2
   | ForDecl { init = init1; cond = cond1; post = post1; body = body1; },
     ForDecl { init = init2; cond = cond2; post = post2; body = body2; } ->
      compare_declarations init1 init2 && compare_exps cond1 cond2 &&
-       compare_exps post1 post2 && compare_statements body1 body2
+       compare_optional_exps post1 post2 && compare_statements body1 body2
   | While { cond = cond1; body = body1 },
     While { cond = cond2; body = body2 } ->
      compare_exps cond1 cond2 && compare_statements body1 body2
   | DoWhile { cond = cond1; body = body1 },
     DoWhile { cond = cond2; body = body2 } ->
      compare_exps cond1 cond2 && compare_statements body1 body2
-  | Exp e1, Exp e2 -> compare_exps e1 e2
+  | Exp e1, Exp e2 -> compare_optional_exps e1 e2
   | _ -> false
 
 and compare_block_items expected actual =
@@ -82,6 +88,7 @@ let compare_asts (Prog fun_list1) (Prog fun_list2) = List.for_all2 compare_funs 
 
 (* AST construction utilities *)
 let make_int i = Const (Int i)
+let make_exp_statement e = Statement (Exp (Some e))
 
 (* Test utilities *)
 
@@ -386,7 +393,7 @@ let assignment_ast =
                     init = None;
                }
   in
-  let assign = Statement (Exp (Assign (Equals, ID "a", make_int 2))) in
+  let assign = make_exp_statement (Assign (Equals, ID "a", make_int 2)) in
   let ret = Statement (ReturnVal (make_int 0)) in
   let block_items = [decl; assign; ret] in
   make_ast [] block_items
@@ -450,34 +457,34 @@ let conditional_parse_tests = [
 let for_tokens = Lex.lex "int main() {for(1; 1; 1) { 1;}}"
 let for_ast =
   let const = make_int 1 in
-  let for_loop = (Statement (For { init=const; cond=const; post=const; body=Block [(Statement (Exp const))] })) in
+  let for_loop = (Statement (For { init=Some const; cond=const; post=Some const; body=Block [make_exp_statement const] })) in
   make_ast [] [for_loop]
 
 let for_compound_tokens = Lex.lex "int main() {int a; for(a=0; a<5; a=a+1){ 1+1; if(a<5) {return 3;} } }"
 let for_compound_ast =
   let decl = Decl { var_type = IntType; var_name = ID "a"; init = None } in
-  let init = Assign(Equals, ID "a", make_int 0) in
-  let post = Assign(Equals, ID "a", BinOp (Add, Var(ID "a"), make_int 1)) in
+  let init = Assign (Equals, ID "a", make_int 0) in
+  let post = Assign (Equals, ID "a", BinOp (Add, Var(ID "a"), make_int 1)) in
   let cond = BinOp (Lt, Var(ID "a"), make_int 5) in
-  let exp = Statement (Exp (BinOp (Add, make_int 1, make_int 1))) in
+  let exp = make_exp_statement (BinOp (Add, make_int 1, make_int 1)) in
   let return = Statement (ReturnVal (make_int 3)) in
   let if_statement = Statement (If { cond; if_body=Block [return]; else_body=None }) in
   let body = Block [exp; if_statement] in
-  let for_loop = Statement (For { init; cond; post; body }) in
+  let for_loop = Statement (For { init=Some init; cond; post=Some post; body }) in
   make_ast [] [decl; for_loop]
 
 let for_declaration_tokens = Lex.lex "int main() {for(int a; 1; 1) { 1;}}"
 let for_decl_ast =
   let const = make_int 1 in
   let decl = { var_type = IntType; var_name = ID "a"; init = None} in
-  let for_loop = Statement (ForDecl { init=decl; cond=const; post=const; body=Block [Statement (Exp const)] }) in
+  let for_loop = Statement (ForDecl { init=decl; cond=const; post=Some const; body=Block [make_exp_statement const] }) in
   make_ast [] [for_loop]
 
 let single_for_tokens = Lex.lex "int main() {for(1; 1; 1) if (1) 1;}"
 let single_for_ast =
   let const = make_int 1 in
-  let if_statement = If { cond=const; if_body=Exp const; else_body=None } in
-  let for_loop = For { init=const; cond=const; post=const; body=if_statement } in
+  let if_statement = If { cond=const; if_body=Exp (Some const); else_body=None } in
+  let for_loop = For { init=Some const; cond=const; post=Some const; body=if_statement } in
   make_ast [] [Statement for_loop]
 
 let for_parse_tests = [
@@ -491,28 +498,28 @@ let for_parse_tests = [
 let while_tokens = Lex.lex "int main() { while (1) 2; }"
 let while_ast =
   let cond = make_int 1 in
-  let body = Exp (make_int 2) in
+  let body = Exp (Some (make_int 2)) in
   let while_statement = Statement (While { cond; body }) in
   make_ast [] [while_statement]
 
 let while_block_tokens = Lex.lex "int main() { while (1) {2;} }"
 let while_block_ast =
   let cond = make_int 1 in
-  let body = Statement (Exp (make_int 2)) in
+  let body = make_exp_statement (make_int 2) in
   let while_statement = Statement (While { cond; body=Block [body] }) in
   make_ast [] [while_statement]
 
-let do_while_tokens = Lex.lex "int main() { do 2; while (1) }"
+let do_while_tokens = Lex.lex "int main() { do 2; while (1); }"
 let do_while_ast =
   let cond = make_int 1 in
-  let body = Exp (make_int 2) in
+  let body = Exp (Some (make_int 2)) in
   let do_while_statement = Statement (DoWhile { body; cond }) in
   make_ast [] [do_while_statement]
 
-let do_while_block_tokens = Lex.lex "int main() { do { 2; } while (1) }"
+let do_while_block_tokens = Lex.lex "int main() { do { 2; } while (1); }"
 let do_while_block_ast =
   let cond = make_int 1 in
-  let body = Statement (Exp (make_int 2)) in
+  let body = make_exp_statement (make_int 2) in
   let do_while_statement = Statement (DoWhile { body=Block [body]; cond }) in
   make_ast [] [do_while_statement]
 

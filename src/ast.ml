@@ -36,7 +36,6 @@ type unop = Negate | Pos | Complement | Not
 type id = ID of string
 
 type exp =
-  | NullExp
   | Const of const
   | Var of id
   | UnOp of unop * exp
@@ -60,9 +59,9 @@ and block = block_item list
 and statement =
   | Block of block
   | If of {cond: exp; if_body: statement; else_body: statement option}
-  | Exp of exp
-  | For of {init: exp; cond: exp; post: exp; body: statement}
-  | ForDecl of {init: declaration; cond: exp; post: exp; body: statement}
+  | Exp of exp option
+  | For of {init: exp option; cond: exp; post: exp option; body: statement}
+  | ForDecl of {init: declaration; cond: exp; post: exp option; body: statement}
   | While of {cond: exp; body: statement}
   | DoWhile of {body: statement; cond: exp}
   | ReturnVal of exp (* should we add a return_exp instead? *)

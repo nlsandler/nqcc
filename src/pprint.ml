@@ -60,11 +60,14 @@ let rec exp_to_string = function
   | FunCall (fun_id, args) -> Printf.sprintf "%s(%s)" (id_to_string fun_id) (args_to_string args)
   | Assign (op, ID var_name, rhs) ->
      Printf.sprintf "%s %s %s" var_name (assign_op_to_string op) (exp_to_string rhs)
-  | NullExp -> ""
 
 and args_to_string args =
   let arg_strings = List.map exp_to_string args in
   String.concat ", " arg_strings
+
+let optional_exp_to_string = function
+  | Some e -> exp_to_string e
+  | None -> ""
 
 let decl_to_string { var_type; var_name=ID id; init } =
   let decl_str = Printf.sprintf "%s %s" (type_to_string var_type) id in
@@ -93,15 +96,17 @@ and pprint_stmt indent = function
      end
   | For { init; cond; post; body } ->
      Printf.printf "%sFOR (%s ; %s ; %s)\n" indent
-       (exp_to_string init) (exp_to_string cond) (exp_to_string post);
+       (optional_exp_to_string init)
+       (exp_to_string cond)
+       (optional_exp_to_string post);
      pprint_stmt (indent^"\t") body;
      Printf.printf "\n"
   | ForDecl { init; cond; post; body } ->
      Printf.printf "%sFOR (%s ; %s ; %s)\n" indent
-       (decl_to_string init) (exp_to_string cond) (exp_to_string post);
+       (decl_to_string init) (exp_to_string cond) (optional_exp_to_string post);
      pprint_stmt (indent^"\t") body;
      Printf.printf "\n"
-  | Exp e -> Printf.printf "%s%s\n" indent (exp_to_string e)
+  | Exp e -> Printf.printf "%s%s\n" indent (optional_exp_to_string e)
   | While { cond; body } ->
      Printf.printf "%sWHILE (%s):\n" (exp_to_string cond) indent;
      pprint_stmt (indent^"\t") body;

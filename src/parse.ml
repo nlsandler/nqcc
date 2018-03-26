@@ -124,7 +124,7 @@ and parse_factor toks =
   | Id name::rest -> Ast.(Var (ID name)), rest
   | Int i::rest -> Ast.(Const (Int i)), rest
   | Char c::rest -> Ast.(Const (Char c)), rest
-  | _ -> failwith "Failed to parse factor"
+  | rest -> failwith "Failed to parse factor"
 
 and parse_term toks = let open Tok in parse_bin_exp parse_factor [Mult; Div; Mod] toks
 
@@ -167,6 +167,16 @@ and parse_exp = function
      let exp, rest = parse_exp rest in
      Ast.(Assign (Equals, var_id, exp)), rest
   | tokens -> parse_ternary_exp tokens
+
+let parse_optional_exp next_expected toks =
+  if (List.hd toks) = next_expected then
+    None, (List.tl toks)
+  else
+    let e, rest = parse_exp toks in
+    if (List.hd rest = next_expected) then
+      Some e, (List.tl rest)
+    else
+      failwith "Didn't get expected token after exp"
 
 let parse_declaration var_type tokens =
   match tokens with
@@ -222,17 +232,14 @@ and parse_if_statement = function
   | _ -> failwith "Expected '(' after 'if'"
 
 and parse_for_components toks =
-  let cond, rest = parse_exp toks in
-  let post, rest =
-    match rest with
-    | Tok.Semicolon::next_toks -> parse_exp next_toks
-    | _ -> failwith "Expected semicolon in for loop"
+  let cond, rest = parse_optional_exp Tok.Semicolon toks in
+  let cond = match cond with
+    (* C11 6.8.5.3 - An omitted expression-2 is replaced by a nonzero constant *)
+    | None -> Ast.Const (Int 1)
+    | Some c -> c
   in
-  let body, rest =
-    match rest with
-    | Tok.CloseParen::body_toks -> parse_statement body_toks
-    | _ -> failwith "Expected closing paren in for loop"
-  in
+  let post, rest = parse_optional_exp Tok.CloseParen rest in
+  let body, rest = parse_statement rest in
   cond, post, body, rest
 
 and parse_for_statement = function
@@ -242,14 +249,9 @@ and parse_for_statement = function
      let cond, post, body, rest = parse_for_components rest in
      Ast.ForDecl { init; cond; post; body }, rest
   | Tok.OpenParen::toks ->
-     let init, rest = parse_exp toks in
-     begin
-       match rest with
-       | Tok.Semicolon::rest ->
-          let cond, post, body, rest = parse_for_components rest in
-          Ast.For { init; cond; post; body }, rest
-       | _ -> failwith "expected semicolon after condition in for loop"
-     end
+     let init, rest = parse_optional_exp Tok.Semicolon toks in
+     let cond, post, body, rest = parse_for_components rest in
+     Ast.For { init; cond; post; body }, rest
   | _ -> failwith "PANIC: expected open paren at start of for loop"
 
 and parse_while_statement toks =
@@ -262,14 +264,17 @@ and parse_do_while_statement toks =
   match rest with
   | Tok.WhileKeyword::cond_tokens ->
      let cond, rest = parse_exp cond_tokens in
-     Ast.DoWhile { body; cond }, rest
+     begin
+       match rest with
+       | Tok.Semicolon::rest -> Ast.DoWhile { body; cond }, rest
+       | _ -> failwith "Expected semicolon after do-while"
+     end
   | _ -> failwith "Expected 'while' after body of do-while"
 
 (* TODO: actually pay attention to types *)
 and parse_statement toks =
   let open Tok in
   match toks with
-  | Semicolon::rest -> Ast.Exp NullExp, rest
   | OpenBrace::_ ->
      let block, rest = parse_block toks in
      Block block, rest
@@ -285,12 +290,8 @@ and parse_statement toks =
   | WhileKeyword::tokens -> parse_while_statement tokens
   | DoKeyword::tokens -> parse_do_while_statement tokens
   | _ ->
-     let exp, rest = parse_exp toks in
-     begin
-       match rest with
-       | Semicolon::rest -> Ast.Exp exp, rest
-       | _ -> failwith "Expected semicolon after expression statement"
-     end
+     let exp, rest = parse_optional_exp Tok.Semicolon toks in
+     Ast.Exp exp, rest
 
 and parse_block_item = function
   | Tok.IntKeyword::tokens ->

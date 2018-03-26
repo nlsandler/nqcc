@@ -91,7 +91,6 @@ let generate filename prog =
   let rec generate_exp exp var_map =
     let open Ast in
     match exp with
-    | NullExp -> ()
     | Assign (Equals, (ID id), exp) ->
        let _ = generate_exp exp var_map in
        (* get location of variable on stack *)
@@ -169,6 +168,11 @@ let generate filename prog =
     List.iter push_arg (List.rev args)
   in
 
+  let generate_optional_exp var_map = function
+    | None -> ()
+    | Some e -> generate_exp e var_map
+  in
+
   let generate_declaration Ast.({ var_type; init; var_name=ID id; }) var_map current_scope stack_index =
     if Set.mem id current_scope
     then handle_error (Printf.sprintf "Variable %s declared twice in same scope" id)
@@ -189,9 +193,11 @@ let generate filename prog =
     match statement with
     | For _  -> generate_for_loop statement var_map stack_index
     | ForDecl _  -> generate_for_decl_loop statement var_map stack_index
+    | While _ -> generate_while_loop statement var_map stack_index
+    | DoWhile _ -> generate_do_while_loop statement var_map stack_index
     | Block block -> generate_block var_map Set.empty stack_index block
     | If _ -> generate_if statement var_map current_scope stack_index
-    | Exp e -> generate_exp e var_map
+    | Exp e -> generate_optional_exp var_map e
     (* for return statements, variable map/stack index unchanged *)
     | ReturnVal exp ->
        let _ = generate_exp exp var_map in
@@ -215,16 +221,20 @@ _post_loop:
 
   and generate_for_loop Ast.(For { init ; cond ; post ; body }) var_map stack_index =
     begin
-      generate_exp init var_map;
-      for_helper cond post body var_map stack_index
+      generate_optional_exp var_map init;
+      loop_helper cond post body var_map stack_index
     end
 
   and generate_for_decl_loop Ast.(ForDecl { init ; cond ; post ; body }) var_map stack_index =
     (* add variable - for loop is new scope*)
     let var_map', _, stack_index' = generate_declaration init var_map Set.empty stack_index in
-    for_helper cond post body var_map' stack_index'
+    loop_helper cond post body var_map' stack_index'
 
-  and for_helper cond post body var_map stack_index =
+  and generate_while_loop Ast.(While { cond ; body }) var_map stack_index =
+    (* while loops don't have post expression *)
+    loop_helper cond None body var_map stack_index
+
+  and loop_helper cond post body var_map stack_index =
     let loop_label = Util.unique_id "loop" in
     let post_loop_label = Util.unique_id "post_loop" in
     begin
@@ -236,11 +246,24 @@ _post_loop:
       (* evaluate loop body, which is a new scope *)
       generate_statement body var_map Set.empty stack_index;
       (* evaluate post expression *)
-      generate_exp post var_map;
+      generate_optional_exp var_map post;
       (* execute loop again *)
       Printf.fprintf chan "    jmp %s\n" loop_label;
       (* label end of loop *)
       Printf.fprintf chan "%s:\n" post_loop_label
+    end
+
+  and generate_do_while_loop Ast.(DoWhile { body; cond }) var_map stack_index =
+    let loop_label = Util.unique_id "do_while" in
+    begin
+      (* do-while body *)
+      Printf.fprintf chan "%s:\n" loop_label;
+      generate_statement body var_map Set.empty stack_index;
+      (* evaluate condition *)
+      generate_exp cond var_map;
+      (* jump back to loop if cond is true *)
+      print_asm "    cmp $0, %%eax\n";
+      Printf.fprintf chan "    jne %s\n" loop_label
     end
 
   and generate_block var_map current_scope stack_index = function
