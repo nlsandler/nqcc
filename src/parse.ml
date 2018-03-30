@@ -289,6 +289,10 @@ and parse_statement toks =
      end
   | WhileKeyword::tokens -> parse_while_statement tokens
   | DoKeyword::tokens -> parse_do_while_statement tokens
+  | BreakKeyword::Semicolon::rest -> Ast.Break, rest
+  | BreakKeyword::_ -> failwith "Expected semicolon after break"
+  | ContinueKeyword::Semicolon::rest -> Ast.Continue, rest
+  | ContinueKeyword::_ -> failwith "Expected semicolon after continue"
   | _ ->
      let exp, rest = parse_optional_exp Tok.Semicolon toks in
      Ast.Exp exp, rest

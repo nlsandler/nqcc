@@ -65,6 +65,8 @@ and statement =
   | While of {cond: exp; body: statement}
   | DoWhile of {body: statement; cond: exp}
   | ReturnVal of exp (* should we add a return_exp instead? *)
+  | Break
+  | Continue
 
 type fun_param = Param of type_def * id
 

@@ -115,6 +115,8 @@ and pprint_stmt indent = function
      Printf.printf "%sDO:\n" indent;
      pprint_stmt (indent^"\t") body;
      Printf.printf "%sWHILE (%s)\n" (exp_to_string cond) indent
+  | Break -> Printf.printf "%sBREAK\n" indent
+  | Continue -> Printf.printf "%sCONTINUE\n" indent
 
 let pprint_function_body body =
   print_string "\tbody:\n";

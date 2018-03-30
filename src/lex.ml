@@ -69,6 +69,8 @@ let get_id t =
   | "for" -> ForKeyword
   | "do" -> DoKeyword
   | "while" -> WhileKeyword
+  | "break" -> BreakKeyword
+  | "continue" -> ContinueKeyword
   | _ -> Id t
 
 let lex_complex_token input =
@@ -181,6 +183,8 @@ let tok_to_string t =
   | ForKeyword -> "FOR"
   | DoKeyword -> "DO"
   | WhileKeyword -> "WHILE"
+  | BreakKeyword -> "BREAK"
+  | ContinueKeyword -> "CONTINUE"
   | Int i -> Printf.sprintf "INT<%d>" i
   | Id id -> Printf.sprintf "ID<%s>" id
   | Char c -> Printf.sprintf "CHAR<%c" c

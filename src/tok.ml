@@ -16,6 +16,8 @@ type token =
     | ForKeyword
     | DoKeyword
     | WhileKeyword
+    | BreakKeyword
+    | ContinueKeyword
     | Bang
     | Complement
     | Plus
