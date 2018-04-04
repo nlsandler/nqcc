@@ -182,12 +182,13 @@ let generate filename prog =
   in
 
   let rec generate_statement context statement =
+    let context = Context.reset_scope context in
     match statement with
-    | Ast.For _  -> generate_for_loop (Context.reset_scope context) statement
-    | ForDecl _  -> generate_for_decl_loop (Context.reset_scope context) statement
-    | While _ -> generate_while_loop  (Context.reset_scope context) statement
-    | DoWhile _ -> generate_do_while_loop (Context.reset_scope context) statement
-    | Block block -> generate_block (Context.reset_scope context) block
+    | Ast.For _  -> generate_for_loop context statement
+    | ForDecl _  -> generate_for_decl_loop context statement
+    | While _ -> generate_while_loop context statement
+    | DoWhile _ -> generate_do_while_loop context statement
+    | Block block -> generate_block context block
     | If _ -> generate_if context statement
     | Break -> generate_break context statement
     | Continue -> generate_continue context statement
@@ -222,7 +223,9 @@ _post_loop:
   and generate_for_decl_loop context Ast.(ForDecl { init ; cond ; post ; body }) =
     (* add variable - for loop is new scope *)
     let context' = generate_declaration context init in
-    loop_helper context' cond post body
+    loop_helper context' cond post body;
+    (* pop declared variable off the stack *)
+    print_asm "    pop %%eax\n"
 
   and generate_while_loop context Ast.(While { cond ; body }) =
     (* while loops don't have post expression *)
@@ -283,7 +286,9 @@ _post_loop:
     | None -> handle_error "Continue statement not in loop"
 
   and generate_block context = function
-    | [] -> ()
+    | [] -> let  bytes_to_deallocate = 4 * Set.cardinal context.current_scope in
+            (* pop any variables declared in this block off the stack *)
+            Printf.fprintf chan "    addl $%d, %%esp\n" bytes_to_deallocate
     | Ast.Statement s::block_items -> begin
         generate_statement context s;
         generate_block context block_items
