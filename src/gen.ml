@@ -341,7 +341,7 @@ _post_loop:
     let context = Context.initialize params
     in
     begin
-      generate_block context body; (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
+      generate_block context body;
       (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
       print_asm "    movl $0, %%eax\n";
       emit_function_epilogue ()

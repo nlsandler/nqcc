@@ -1,17 +1,5 @@
 open Batteries
 
-let rec parse_fun_params tokens =
-  let open Tok in
-  match tokens with
-  | CloseParen::rest -> ([], rest)
-  | IntKeyword::(Id name)::rest ->
-     let other_params, rest = parse_fun_params rest in
-     Ast.(Param (IntType, ID name)::other_params, rest)
-  | CharKeyword::(Id name)::rest ->
-     let other_params, rest = parse_fun_params rest in
-     Ast.(Param (CharType, ID name)::other_params, rest)
-  | _ -> failwith "Parse error in parse_fun_params"
-
 let tok_to_const = function
   | Tok.Int i -> Ast.(Const (Int i))
   | Tok.Char c -> Ast.(Const (Char c))
@@ -78,6 +66,24 @@ let parse_bin_exp parse_next_level op_toks toks =
   in
   (* try adding more subexpressions *)
   add_terms left rest
+
+let parse_next_param = function
+  | Tok.IntKeyword::(Id name)::rest ->
+     Ast.(Param (IntType, ID name)), rest
+  | Tok.CharKeyword::(Id name)::rest ->
+     Ast.(Param (CharType, ID name)), rest
+  | _ -> failwith "Invalid function parameter"
+
+let rec parse_fun_params = function
+  | Tok.CloseParen::rest -> [], rest
+  | toks ->
+     let param, rest = parse_next_param toks in
+     let params, rest =
+       match rest with
+       | Tok.Comma::more_params -> parse_fun_params more_params
+       | CloseParen::after_params -> [], after_params
+       | _ -> failwith "Invalid list of parameters"
+     in param::params, rest
 
 let rec parse_function_call = function
   | Tok.(Id name::OpenParen::arg_tokens) ->

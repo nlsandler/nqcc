@@ -11,7 +11,6 @@ type t = {
 
 let initialize params =
   (* arguments are just below return address, which is just below EBP, so first arg at ebp + 8
-     reverse fun_params b/c they go on stack right to left
    *)
   let add_param (m, si, sc) (Ast.Param (_, ID id)) =
     Map.add id si m, si + 4, Set.add id sc
@@ -20,11 +19,12 @@ let initialize params =
     List.fold_left
       add_param
       (Map.empty, 8, Set.empty)
-      (List.rev params)
+      params
   in
   {
     var_map=var_map;
     current_scope=scope;
+    (* stack index, i.e. offset of thing after ESP from EBP, is 4 *)
     stack_index=(-4);
     break_label=None;
     continue_label=None
