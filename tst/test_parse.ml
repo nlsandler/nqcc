@@ -80,9 +80,10 @@ and compare_block_items expected actual =
 
 let compare_funs expected actual =
   match expected, actual with
-  | FunDecl { fun_type=t1; name=name1; params=params1; body=body1 },
-    FunDecl { fun_type=t2; name=name2; params=params2; body=body2 } ->
+  | FunDecl { fun_type=t1; name=name1; params=params1; body=Some body1 },
+    FunDecl { fun_type=t2; name=name2; params=params2; body=Some body2 } ->
      t1 == t2 && compare_ids name1 name2 && List.for_all2 compare_params params1 params2 && List.for_all2 compare_block_items body1 body2
+  | _ -> false
 
 let compare_asts (Prog fun_list1) (Prog fun_list2) = List.for_all2 compare_funs fun_list1 fun_list2
 
@@ -116,7 +117,7 @@ let test_compare_asts tokens expected_ast test_ctxt =
 let make_ast params block_items =
   let body = block_items in
   let name = ID "main" in
-  let f = FunDecl { fun_type=IntType; name; params; body } in
+  let f = FunDecl { fun_type=IntType; name; params; body=Some body } in
   Prog([f])
 
 let make_simple_ast params exp =
@@ -531,21 +532,32 @@ let while_parse_tests = [
   ]
 
 (* FUNCTION CALLS *)
-let fun_tokens = Lex.lex "int main() { return foo(); }" (* note: call to undefined function should fail during code generation, not parsing *)
-let fun_ast =
-  let fun_call = FunCall (ID "foo", []) in
-  make_simple_ast [] fun_call
 
-let fun_args_tokens = Lex.lex "int main() { return foo(5); }"
+let make_foo_decl params = FunDecl { fun_type=IntType; name=ID "foo"; params; body=Some [] }
+
+let make_fun_call_program params args =
+  let foo_decl = make_foo_decl params in
+  let fun_call = FunCall (ID "foo", args) in
+  let main_body = [Statement (ReturnVal fun_call)] in
+  let main_decl = FunDecl { fun_type=IntType; name=ID "main"; params=[]; body=Some main_body } in
+  Prog [foo_decl; main_decl]
+
+let make_param name = Param (IntType, ID name)
+
+let fun_tokens = Lex.lex "int foo(){} int main() { return foo(); }"
+let fun_ast = make_fun_call_program [] []
+
+let fun_args_tokens = Lex.lex "int foo(int a){} int main() { return foo(5); }"
 let fun_args_ast =
-  let fun_call = FunCall (ID "foo", [make_int 5]) in
-  make_simple_ast [] fun_call
+  let foo_params = [make_param "a"]  in
+  let foo_args = [make_int 5] in
+  make_fun_call_program foo_params foo_args
 
-let fun_arg_exp_tokens = Lex.lex "int main() { return foo(a + 5); }"
+let fun_arg_exp_tokens = Lex.lex "int foo(int a){} int main() { return foo(a + 5); }"
 let fun_arg_exp_ast =
+  let foo_params = [make_param "a"] in
   let arg_exp = BinOp (Add, Var (ID "a"), make_int 5) in
-  let fun_call = FunCall (ID "foo", [arg_exp]) in
-  make_simple_ast [] fun_call
+  make_fun_call_program foo_params [arg_exp]
 
 let fun_call_standalone = "int main() {incr (b);}"
 

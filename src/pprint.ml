@@ -125,7 +125,12 @@ let pprint_function_body body =
 let pprint_function (FunDecl { fun_type; name; params; body }) =
   let _ = pprint_function_decl fun_type name in
   let _ = pprint_function_params params in
-  let _ = pprint_function_body body in
-  ()
+  match body with
+  | Some body ->
+     begin
+       pprint_function_body body;
+       ()
+     end
+  | None -> ()
 
 let pprint (Prog funs) = List.iter pprint_function funs

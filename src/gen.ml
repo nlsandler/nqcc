@@ -16,9 +16,6 @@ let generate filename prog =
 
   let var_lookup = Context.var_lookup handle_error in
 
-  (* main is always entry point *)
-  let _ = Printf.fprintf chan "    .globl _main\n" in
-
   let emit_label label = Printf.fprintf chan "%s:\n" label in
 
   let emit_comparison set_instruction =
@@ -145,10 +142,27 @@ let generate filename prog =
        Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index;
     | FunCall (ID id, args) ->
        let arg_count = List.length args in
+       let _ =
+         (* edx = (esp - 4*(arg_count + 1)) % 16 *)
+         (* the + 1 is for saved remainder *)
+         print_asm "    movl %%esp, %%eax\n";
+         Printf.fprintf chan "    subl $%d, %%eax\n" (4*(arg_count + 1));
+         print_asm "    xorl %%edx, %%edx\n";
+         print_asm "    movl $0x20, %%ecx\n";
+         print_asm "    idivl %%ecx\n";
+         (* edx contains the remainder, i.e. # of bytes to subtract *)
+         print_asm "    subl %%edx, %%esp\n";
+         print_asm "    pushl %%edx\n" (* need it for deallocating *)
+       in
        let _ = put_args_on_stack context args in
        begin
+         (* actually make the call *)
          Printf.fprintf chan "    call _%s\n" id;
-         Printf.fprintf chan "    addl $%d, %%esp\n" (arg_count * 4)
+         (* deallocate args *)
+         Printf.fprintf chan "    addl $%d, %%esp\n" (arg_count * 4);
+         (* pop remainder off stack, undo 16-byte alignment *)
+         print_asm "    popl %%edx\n";
+         print_asm "    addl %%edx, %%esp\n"
        end
     | Const (Int i) ->
        Printf.fprintf chan "    movl    $%d, %%eax\n" i
@@ -332,20 +346,24 @@ _post_loop:
   in
 
   let generate_fun Ast.(FunDecl { fun_type; name=ID fun_name; params; body }) =
-    let _ = begin
-        Printf.fprintf chan "_%s:\n" fun_name;
-        print_asm "    push %%ebp\n";
-        print_asm "    movl %%esp, %%ebp\n"
-      end
-    in
-    let context = Context.initialize params
-    in
-    begin
-      generate_block context body;
-      (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
-      print_asm "    movl $0, %%eax\n";
-      emit_function_epilogue ()
-    end
+    match body with
+    | Some body ->
+       let _ = begin
+           Printf.fprintf chan "    .globl _%s\n" fun_name;
+           Printf.fprintf chan "_%s:\n" fun_name;
+           print_asm "    push %%ebp\n";
+           print_asm "    movl %%esp, %%ebp\n"
+         end
+       in
+       let context = Context.initialize params
+       in
+       begin
+         generate_block context body;
+         (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
+         print_asm "    movl $0, %%eax\n";
+         emit_function_epilogue ()
+       end
+    | None -> ()
   in
 
   let rec generate_funs = function

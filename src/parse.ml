@@ -43,29 +43,279 @@ let op_map =
  * We would invoke this function as follows:
  * parse_bin_exp parse_term [Tok.Plus; Tok.Minus] toks
  **)
-let parse_bin_exp parse_next_level op_toks toks =
-  (* call parse_next_level to parse first sub-expression *)
-  let left, rest = parse_next_level toks in
-  let rec add_terms left_exp toks =
-    let hd_tok = List.hd toks in
-    if (List.mem hd_tok op_toks) then
-      (* The first token after left_exp is an operator we care about,
-       * so there must be another sub-expression *)
+let parse_expression fun_map toks =
+  let parse_bin_exp parse_next_level op_toks toks =
+    (* call parse_next_level to parse first sub-expression *)
+    let left, rest = parse_next_level toks in
+    let rec add_terms left_exp toks =
+      let hd_tok = List.hd toks in
+      if (List.mem hd_tok op_toks) then
+        (* The first token after left_exp is an operator we care about,
+         * so there must be another sub-expression *)
 
-      (* Parse the next sub-expression *)
-      let right_exp, rest = parse_next_level (List.tl toks) in
-      let bin_op = Map.find hd_tok op_map in
-      (* Construct BinOp AST node BEFORE parsing additional sub-expressions.
-       * This enforces left-associativity. *)
-      let left_exp = Ast.BinOp (bin_op, left_exp, right_exp) in
-      (* Try to parse more sub-expressions *)
-      add_terms left_exp rest
-    else
-      (* No more sub-expressions to add, return current exp *)
-      left_exp, toks
+        (* Parse the next sub-expression *)
+        let right_exp, rest = parse_next_level (List.tl toks) in
+        let bin_op = Map.find hd_tok op_map in
+        (* Construct BinOp AST node BEFORE parsing additional sub-expressions.
+         * This enforces left-associativity. *)
+        let left_exp = Ast.BinOp (bin_op, left_exp, right_exp) in
+        (* Try to parse more sub-expressions *)
+        add_terms left_exp rest
+      else
+        (* No more sub-expressions to add, return current exp *)
+        left_exp, toks
+    in
+    (* try adding more subexpressions *)
+    add_terms left rest
   in
-  (* try adding more subexpressions *)
-  add_terms left rest
+
+  let rec parse_function_call = function
+    | Tok.(Id name::OpenParen::arg_tokens) ->
+       let fun_name = Ast.ID(name) in
+       let args, rest = parse_function_arguments arg_tokens in
+       let expected_nargs, _ =
+         try
+           Map.find fun_name fun_map
+         with
+         | Not_found -> failwith "Undeclared function"
+       in
+       if expected_nargs == List.length args
+       then Ast.FunCall(fun_name, args), rest
+       else failwith "Wrong number of arguments in function call"
+    | _ -> failwith "Shouldn't have called parse_function_call, this isn't a function call"
+
+  and parse_function_arguments = function
+    | Tok.CloseParen::rest -> [], rest
+    | toks ->
+       let arg, rest = parse_exp toks in
+       let args, rest =
+         match rest with
+         | Tok.Comma::more_args -> parse_function_arguments more_args
+         | Tok.CloseParen::after_fun_call -> [], after_fun_call
+         | _ -> failwith "Invalid list of function arguments"
+       in
+       arg::args, rest
+
+  and parse_factor toks =
+    let open Tok in
+    match toks with
+    | OpenParen::factor ->
+       let exp, after_exp = parse_exp factor in
+       begin
+         match after_exp with
+         | CloseParen::rest -> (exp, rest)
+         | _ -> failwith "Syntax error: expected close paren"
+       end
+    | Minus::factor ->
+       let num, rest = parse_factor factor in
+       Ast.(UnOp (Negate, num)), rest
+    | Plus::factor ->
+       let num, rest = parse_factor factor in
+       Ast.(UnOp (Pos, num)), rest
+    | Complement::factor ->
+       let num, rest = parse_factor factor in
+       Ast.(UnOp (Complement, num)), rest
+    | Bang::factor ->
+       let num, rest = parse_factor factor in
+       Ast.(UnOp (Not, num)), rest
+    | Id name::OpenParen::rest -> parse_function_call toks
+    | Id name::rest -> Ast.(Var (ID name)), rest
+    | Int i::rest -> Ast.(Const (Int i)), rest
+    | Char c::rest -> Ast.(Const (Char c)), rest
+    | rest -> failwith "Failed to parse factor"
+
+  and parse_term toks = let open Tok in parse_bin_exp parse_factor [Mult; Div; Mod] toks
+
+  and parse_additive_exp toks = let open Tok in parse_bin_exp parse_term [Plus; Minus] toks
+
+  and parse_shift_exp toks = let open Tok in parse_bin_exp parse_additive_exp [ShiftLeft; ShiftRight] toks
+
+  and parse_relational_exp toks = let open Tok in parse_bin_exp parse_shift_exp [Lt; Le; Gt; Ge] toks
+
+  and parse_equality_exp toks = let open Tok in parse_bin_exp parse_relational_exp [DoubleEq; Neq] toks
+
+  and parse_bitwise_and_exp toks = parse_bin_exp parse_equality_exp [Tok.BitAnd] toks
+
+  and parse_xor_exp toks = parse_bin_exp parse_bitwise_and_exp [Tok.Xor] toks
+
+  and parse_bitwise_or_exp toks = parse_bin_exp parse_xor_exp [Tok.BitOr] toks
+
+  and parse_and_exp toks = parse_bin_exp parse_bitwise_or_exp [Tok.And] toks
+
+  and parse_or_exp toks = parse_bin_exp parse_and_exp [Tok.Or] toks
+
+  and parse_ternary_exp toks =
+    let exp_1, rest = parse_or_exp toks in
+    match rest with
+    | Tok.Question::branch1_tokens ->
+       let branch1, rest = parse_exp branch1_tokens in
+       begin
+         match rest with
+         | Tok.Colon::branch2_tokens ->
+            let branch2, rest = parse_ternary_exp branch2_tokens in
+            Ast.TernOp (exp_1, branch1, branch2), rest
+         | _ -> failwith "Expected colon after ternary operator"
+       end
+    | _ -> exp_1, rest
+
+  and parse_exp = function
+    | Tok.(Id v::Eq::rest) ->
+       (* assignment statement *)
+       let var_id = Ast.ID v in
+       let exp, rest = parse_exp rest in
+       Ast.(Assign (Equals, var_id, exp)), rest
+    | tokens -> parse_ternary_exp tokens
+  in
+  parse_exp toks
+
+let parse_optional_exp fun_map next_expected toks =
+  if (List.hd toks) = next_expected then
+    None, (List.tl toks)
+  else
+    let e, rest = parse_expression fun_map toks in
+    if (List.hd rest = next_expected) then
+      Some e, (List.tl rest)
+    else
+      failwith "Didn't get expected token after exp"
+
+let parse_declaration fun_map var_type = function
+  | Tok.Id varname::rest ->
+     let var_id = Ast.ID varname in
+     let init, rest =
+       match rest with
+       | Tok.Semicolon::rest_of_statements -> None, rest
+       | Tok.Eq::rest ->
+          let exp, rest = parse_expression fun_map rest in
+          Some exp, rest
+       | _ -> failwith "Invalid initial value for variable"
+     in
+     let declaration = Ast.{
+           var_type = var_type;
+           var_name = var_id;
+           init = init;
+                       }
+     in
+     begin
+       match rest with
+       | Tok.Semicolon::rest -> declaration, rest
+       | _ -> failwith "Expected semicolon after declaration"
+     end
+  | _ -> failwith "Invalid variable declaration"
+
+let parse_function_body fun_map toks =
+  let parse_return_statement stmt =
+    let exp, rest = parse_expression fun_map stmt in
+    Ast.ReturnVal exp, rest
+  in
+
+  let rec parse_block = function
+    | Tok.OpenBrace::more_tokens ->
+       begin
+         let block_items, rest = parse_block_item_list more_tokens in
+         match rest with
+         | Tok.CloseBrace::rest -> block_items, rest
+         | _ -> failwith "Expected closing brace at end of block"
+       end
+    | _ -> failwith "Expected opening brace at start of block"
+
+  and parse_if_statement  = function
+    | Tok.OpenParen::_ as toks ->
+       let cond, rest = parse_expression fun_map toks in
+       let if_body, rest = parse_statement rest in
+       let else_body, rest =
+         match rest with
+         | Tok.ElseKeyword::else_tokens ->
+            let else_body, rest = parse_statement else_tokens in
+            Some else_body, rest
+         | _ -> None, rest in
+       let if_statement = Ast.If { cond; if_body; else_body } in
+       if_statement, rest
+    | _ -> failwith "Expected '(' after 'if'"
+
+  and parse_for_components toks =
+    let cond, rest = parse_optional_exp fun_map Tok.Semicolon toks in
+    let cond = match cond with
+      (* C11 6.8.5.3 - An omitted expression-2 is replaced by a nonzero constant *)
+      | None -> Ast.Const (Int 1)
+      | Some c -> c
+    in
+    let post, rest = parse_optional_exp fun_map Tok.CloseParen rest in
+    let body, rest = parse_statement rest in
+    cond, post, body, rest
+
+  and parse_for_statement = function
+    | Tok.(OpenParen::IntKeyword::toks) ->
+       (* for loop w/ variable declaration *)
+       let init, rest = parse_declaration fun_map Ast.IntType toks in
+       let cond, post, body, rest = parse_for_components rest in
+       Ast.ForDecl { init; cond; post; body }, rest
+    | Tok.OpenParen::toks ->
+       let init, rest = parse_optional_exp fun_map Tok.Semicolon toks in
+       let cond, post, body, rest = parse_for_components rest in
+       Ast.For { init; cond; post; body }, rest
+    | _ -> failwith "PANIC: expected open paren at start of for loop"
+
+  and parse_while_statement toks =
+    let cond, rest = parse_expression fun_map toks in
+    let body, rest = parse_statement rest in
+    Ast.While { cond; body }, rest
+
+  and parse_do_while_statement toks =
+    let body, rest = parse_statement toks in
+    match rest with
+    | Tok.WhileKeyword::cond_tokens ->
+       let cond, rest = parse_expression fun_map cond_tokens in
+       begin
+         match rest with
+         | Tok.Semicolon::rest -> Ast.DoWhile { body; cond }, rest
+         | _ -> failwith "Expected semicolon after do-while"
+       end
+    | _ -> failwith "Expected 'while' after body of do-while"
+
+  (* TODO: actually pay attention to types *)
+  and parse_statement toks =
+    let open Tok in
+    match toks with
+    | OpenBrace::_ ->
+       let block, rest = parse_block toks in
+       Block block, rest
+    | IfKeyword::tokens -> parse_if_statement tokens
+    | ForKeyword::tokens -> parse_for_statement tokens
+  | ReturnKeyword::tokens ->
+     let statement, rest = parse_return_statement tokens in
+     begin
+       match rest with
+       | Semicolon::rest -> statement, rest
+       | _ -> failwith "Expected semicolon after return statement"
+     end
+  | WhileKeyword::tokens -> parse_while_statement tokens
+  | DoKeyword::tokens -> parse_do_while_statement tokens
+  | BreakKeyword::Semicolon::rest -> Ast.Break, rest
+  | BreakKeyword::_ -> failwith "Expected semicolon after break"
+  | ContinueKeyword::Semicolon::rest -> Ast.Continue, rest
+  | ContinueKeyword::_ -> failwith "Expected semicolon after continue"
+  | _ ->
+     let exp, rest = parse_optional_exp fun_map Tok.Semicolon toks in
+     Ast.Exp exp, rest
+
+  and parse_block_item = function
+    | Tok.IntKeyword::tokens ->
+       let decl, rest = parse_declaration fun_map Ast.IntType tokens in
+       Ast.Decl decl, rest
+    | tokens ->
+       let stmt, rest = parse_statement tokens in
+       Ast.Statement stmt, rest
+
+  and parse_block_item_list tokens =
+    if (List.hd tokens) == Tok.CloseBrace
+    then [], tokens
+    else
+      let next_statement, rest = parse_block_item tokens in
+      let statements, rest = parse_block_item_list rest in
+      next_statement::statements, rest
+
+  in
+  parse_block toks
 
 let parse_next_param = function
   | Tok.IntKeyword::(Id name)::rest ->
@@ -85,255 +335,52 @@ let rec parse_fun_params = function
        | _ -> failwith "Invalid list of parameters"
      in param::params, rest
 
-let rec parse_function_call = function
-  | Tok.(Id name::OpenParen::arg_tokens) ->
-     let fun_name = Ast.ID(name) in
-     let args, rest = parse_function_arguments arg_tokens in
-     Ast.FunCall(fun_name, args), rest
-  | _ -> failwith "Shouldn't have called parse_function_call, this isn't a function call"
-
-and parse_function_arguments = function
-  | Tok.CloseParen::rest -> [], rest
-  | toks ->
-     let arg, rest = parse_exp toks in
-     let args, rest =
-       match rest with
-       | Tok.Comma::more_args -> parse_function_arguments more_args
-       | Tok.CloseParen::after_fun_call -> [], after_fun_call
-       | _ -> failwith "Invalid list of function arguments"
-     in
-     arg::args, rest
-
-and parse_factor toks =
-  let open Tok in
-  match toks with
-  | OpenParen::factor ->
-     let exp, after_exp = parse_exp factor in
-     begin
-       match after_exp with
-       | CloseParen::rest -> (exp, rest)
-       | _ -> failwith "Syntax error: expected close paren"
-     end
-  | Minus::factor ->
-     let num, rest = parse_factor factor in
-     Ast.(UnOp (Negate, num)), rest
-  | Plus::factor ->
-     let num, rest = parse_factor factor in
-     Ast.(UnOp (Pos, num)), rest
-  | Complement::factor ->
-     let num, rest = parse_factor factor in
-     Ast.(UnOp (Complement, num)), rest
-  | Bang::factor ->
-     let num, rest = parse_factor factor in
-     Ast.(UnOp (Not, num)), rest
-  | Id name::OpenParen::rest -> parse_function_call toks
-  | Id name::rest -> Ast.(Var (ID name)), rest
-  | Int i::rest -> Ast.(Const (Int i)), rest
-  | Char c::rest -> Ast.(Const (Char c)), rest
-  | rest -> failwith "Failed to parse factor"
-
-and parse_term toks = let open Tok in parse_bin_exp parse_factor [Mult; Div; Mod] toks
-
-and parse_additive_exp toks = let open Tok in parse_bin_exp parse_term [Plus; Minus] toks
-
-and parse_shift_exp toks = let open Tok in parse_bin_exp parse_additive_exp [ShiftLeft; ShiftRight] toks
-
-and parse_relational_exp toks = let open Tok in parse_bin_exp parse_shift_exp [Lt; Le; Gt; Ge] toks
-
-and parse_equality_exp toks = let open Tok in parse_bin_exp parse_relational_exp [DoubleEq; Neq] toks
-
-and parse_bitwise_and_exp toks = parse_bin_exp parse_equality_exp [Tok.BitAnd] toks
-
-and parse_xor_exp toks = parse_bin_exp parse_bitwise_and_exp [Tok.Xor] toks
-
-and parse_bitwise_or_exp toks = parse_bin_exp parse_xor_exp [Tok.BitOr] toks
-
-and parse_and_exp toks = parse_bin_exp parse_bitwise_or_exp [Tok.And] toks
-
-and parse_or_exp toks = parse_bin_exp parse_and_exp [Tok.Or] toks
-
-and parse_ternary_exp toks =
-  let exp_1, rest = parse_or_exp toks in
-  match rest with
-  | Tok.Question::branch1_tokens ->
-     let branch1, rest = parse_exp branch1_tokens in
-     begin
-       match rest with
-       | Tok.Colon::branch2_tokens ->
-          let branch2, rest = parse_ternary_exp branch2_tokens in
-          Ast.TernOp (exp_1, branch1, branch2), rest
-       | _ -> failwith "Expected colon after ternary operator"
-     end
-  | _ -> exp_1, rest
-
-and parse_exp = function
-  | Tok.(Id v::Eq::rest) ->
-     (* assignment statement *)
-     let var_id = Ast.ID v in
-     let exp, rest = parse_exp rest in
-     Ast.(Assign (Equals, var_id, exp)), rest
-  | tokens -> parse_ternary_exp tokens
-
-let parse_optional_exp next_expected toks =
-  if (List.hd toks) = next_expected then
-    None, (List.tl toks)
-  else
-    let e, rest = parse_exp toks in
-    if (List.hd rest = next_expected) then
-      Some e, (List.tl rest)
-    else
-      failwith "Didn't get expected token after exp"
-
-let parse_declaration var_type tokens =
-  match tokens with
-  | Tok.Id varname::rest ->
-     let var_id = Ast.ID varname in
-     let init, rest =
-       match rest with
-       | Tok.Semicolon::rest_of_statements -> None, rest
-       | Tok.Eq::rest ->
-          let exp, rest = parse_exp rest in
-          Some exp, rest
-       | _ -> failwith "Invalid initial value for variable"
-     in
-     let declaration = Ast.{
-           var_type = var_type;
-           var_name = var_id;
-           init = init;
-                       }
-     in
-     begin
-       match rest with
-       | Tok.Semicolon::rest -> declaration, rest
-       | _ -> failwith "Expected semicolon after declaration"
-     end
-  | _ -> failwith "Invalid variable declaration"
-
-let parse_return_statement stmt =
-  let exp, rest = parse_exp stmt in
-  Ast.ReturnVal exp, rest
-
-let rec parse_block = function
-  | Tok.OpenBrace::more_tokens ->
-     begin
-       let block_items, rest = parse_block_item_list more_tokens in
-       match rest with
-       | Tok.CloseBrace::rest -> block_items, rest
-       | _ -> failwith "Expected closing brace at end of block"
-     end
-  | _ -> failwith "Expected opening brace at start of block"
-
-and parse_if_statement = function
-  | Tok.OpenParen::_ as toks ->
-     let cond, rest = parse_exp toks in
-     let if_body, rest = parse_statement rest in
-     let else_body, rest =
-       match rest with
-       | Tok.ElseKeyword::else_tokens ->
-          let else_body, rest = parse_statement else_tokens in
-          Some else_body, rest
-       | _ -> None, rest in
-     let if_statement = Ast.If { cond; if_body; else_body } in
-     if_statement, rest
-  | _ -> failwith "Expected '(' after 'if'"
-
-and parse_for_components toks =
-  let cond, rest = parse_optional_exp Tok.Semicolon toks in
-  let cond = match cond with
-    (* C11 6.8.5.3 - An omitted expression-2 is replaced by a nonzero constant *)
-    | None -> Ast.Const (Int 1)
-    | Some c -> c
-  in
-  let post, rest = parse_optional_exp Tok.CloseParen rest in
-  let body, rest = parse_statement rest in
-  cond, post, body, rest
-
-and parse_for_statement = function
-  | Tok.(OpenParen::IntKeyword::toks) ->
-     (* for loop w/ variable declaration *)
-     let init, rest = parse_declaration Ast.IntType toks in
-     let cond, post, body, rest = parse_for_components rest in
-     Ast.ForDecl { init; cond; post; body }, rest
-  | Tok.OpenParen::toks ->
-     let init, rest = parse_optional_exp Tok.Semicolon toks in
-     let cond, post, body, rest = parse_for_components rest in
-     Ast.For { init; cond; post; body }, rest
-  | _ -> failwith "PANIC: expected open paren at start of for loop"
-
-and parse_while_statement toks =
-  let cond, rest = parse_exp toks in
-  let body, rest = parse_statement rest in
-  Ast.While { cond; body }, rest
-
-and parse_do_while_statement toks =
-  let body, rest = parse_statement toks in
-  match rest with
-  | Tok.WhileKeyword::cond_tokens ->
-     let cond, rest = parse_exp cond_tokens in
-     begin
-       match rest with
-       | Tok.Semicolon::rest -> Ast.DoWhile { body; cond }, rest
-       | _ -> failwith "Expected semicolon after do-while"
-     end
-  | _ -> failwith "Expected 'while' after body of do-while"
-
-(* TODO: actually pay attention to types *)
-and parse_statement toks =
-  let open Tok in
-  match toks with
-  | OpenBrace::_ ->
-     let block, rest = parse_block toks in
-     Block block, rest
-  | IfKeyword::tokens -> parse_if_statement tokens
-  | ForKeyword::tokens -> parse_for_statement tokens
-  | ReturnKeyword::tokens ->
-     let statement, rest = parse_return_statement tokens in
-     begin
-       match rest with
-       | Semicolon::rest -> statement, rest
-       | _ -> failwith "Expected semicolon after return statement"
-     end
-  | WhileKeyword::tokens -> parse_while_statement tokens
-  | DoKeyword::tokens -> parse_do_while_statement tokens
-  | BreakKeyword::Semicolon::rest -> Ast.Break, rest
-  | BreakKeyword::_ -> failwith "Expected semicolon after break"
-  | ContinueKeyword::Semicolon::rest -> Ast.Continue, rest
-  | ContinueKeyword::_ -> failwith "Expected semicolon after continue"
-  | _ ->
-     let exp, rest = parse_optional_exp Tok.Semicolon toks in
-     Ast.Exp exp, rest
-
-and parse_block_item = function
-  | Tok.IntKeyword::tokens ->
-     let decl, rest = parse_declaration Ast.IntType tokens in
-     Ast.Decl decl, rest
-  | tokens ->
-     let stmt, rest = parse_statement tokens in
-     Ast.Statement stmt, rest
-
-and parse_block_item_list tokens =
-  if (List.hd tokens) == Tok.CloseBrace
-  then [], tokens
-  else
-    let next_statement, rest = parse_block_item tokens in
-    let statements, rest = parse_block_item_list rest in
-    next_statement::statements, rest
-
-let parse_fun tokens =
+let parse_fun fun_map tokens =
   let fun_type, name, rest =
     match tokens with
     | Tok.(IntKeyword::Id name::OpenParen::rest) -> Ast.(IntType, ID name, rest)
     | Tok.(CharKeyword::Id name::OpenParen::rest) -> Ast.(CharType, ID name, rest)
     | _ -> failwith "Parse error in parse_fun: bad function type or name" in
   let params, rest = parse_fun_params rest in
-  let body, rest = parse_block rest in
-  Ast.FunDecl { fun_type; name; params; body }, rest
+  let nparams = List.length params in
+  let has_body =
+    match rest with
+    | Tok.OpenBrace::_ -> true
+    | _ -> false
+  in
+  (* we need to update fun_map BEFORE parsing function body,
+   * so we can handle recursive functions
+   *)
+  let fun_map' =
+    try
+      let orig_nparams, orig_has_body = Map.find name fun_map in
+      if orig_nparams != nparams then
+        failwith "Number of parameters in function conflicts with earlier declaration"
+      else if has_body && orig_has_body then
+        failwith "Redefinition of function that was already defined."
+      else
+        Map.add name (nparams, orig_has_body || has_body) fun_map
+    with
+    | Not_found -> Map.add name (nparams, has_body) fun_map
+  in
+  let opt_body, rest =
+    match rest with
+    | Tok.OpenBrace::_ ->
+       let body, rest' = parse_function_body fun_map' rest in
+       Some body, rest'
+    | Tok.Semicolon::rest' -> None, rest'
+    | _ -> failwith "Unexpected token after function declaration"
+  in
+  let decl = Ast.FunDecl { fun_type; name; params; body=opt_body } in
+  decl, fun_map', rest
 
-let rec parse_funs = function
+let rec parse_funs fun_map = function
   | [] -> [] (* no functions left to parse *)
   | tokens ->
-     let f, rest = parse_fun tokens in
-     let fs = parse_funs rest in
+     let f, fun_map', rest = parse_fun fun_map tokens in
+     let fs = parse_funs fun_map' rest in
      f::fs
 
-let parse tokens = Ast.Prog (parse_funs tokens)
+let parse tokens =
+  let fun_map = Map.empty in
+  Ast.Prog (parse_funs fun_map tokens)

@@ -74,7 +74,7 @@ type fun_decl =
   FunDecl of { fun_type: type_def;
                name: id;
                params: fun_param list;
-               body: block;
+               body: block option;
              }
 
 type prog = Prog of fun_decl list
