@@ -32,7 +32,7 @@ The compiled executable will be in the same directory as the source file, and ha
 ```
 ocaml setup.ml -configure --enable-tests # you only need to run this once
 make test # run unit tests
-./test_compiler.sh # compile sample programs
+./test_examples.sh # compile sample programs
 ````
 
 You can also test against [this test suite](https://github.com/nlsandler/write_a_c_compiler).
