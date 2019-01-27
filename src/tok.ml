@@ -9,6 +9,8 @@ type token =
     | Semicolon
     | Colon
     | IntKeyword
+    | StaticKeyword
+    | ExternKeyword
     | CharKeyword
     | ReturnKeyword
     | IfKeyword

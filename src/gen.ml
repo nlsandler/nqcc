@@ -5,6 +5,7 @@ let generate filename prog =
   (* Open assembly file for writing *)
   let filename_asm = String.splice filename (-1) 1 "s" in
   let chan = open_out filename_asm in
+  (* TODO: add newline! *)
   let print_asm = Printf.fprintf chan in
 
   let handle_error message = begin
@@ -82,14 +83,37 @@ let generate filename prog =
          print_asm "    andb %%cl, %%al\n"
        end in
 
+  let emit_local_heap_decl lbl heap_decl =
+    let init = Context.init_or_zero heap_decl in
+    if init = 0 then
+      Printf.fprintf chan ".zerofill __DATA,__bss,_%s,4,2\n" lbl
+    else
+      begin
+        print_asm "    .data\n";
+        print_asm "    .align 2\n";
+        Printf.fprintf chan "_%s:\n" lbl;
+        Printf.fprintf chan "    .long %d\n" init
+      end
+  in
+
+  let emit_local_heap_decls = Map.iter emit_local_heap_decl in
+
+  let emit_global_heap_decl lbl heap_decl = failwith "TODO" in
+
+  let emit_global_heap_decls = Map.iter emit_global_heap_decl in
+
   (* generate code to execute expression and move result into eax *)
   let rec generate_exp context = function
     | Ast.(Assign (Equals, (ID id), exp)) ->
        let _ = generate_exp context exp in
-       (* get location of variable on stack *)
-       let var_index = var_lookup context id in
-       (* move value  of eax to that variable *)
-       Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
+       (* get location of variable in memory *)
+       begin
+         match var_lookup context id with
+         (* TODO refactor these liens *)
+         | Context.Stack var_index -> Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
+         | Context.Heap lbl -> Printf.fprintf chan "    movl %%eax, _%s\n" lbl
+       end
+
     | TernOp (e1, e2, e3) ->
        let post_tern_label = Util.unique_id "post_ternary" in
        let e3_label = Util.unique_id "second_branch_label" in
@@ -137,9 +161,13 @@ let generate filename prog =
             print_asm "    sete %%al\n";         (* if eax was zero in earlier comparison, set al to 1 *)
        end
     | Var (ID id) ->
-       let var_index = var_lookup context id in
-       (* move value  of variable to eax *)
-       Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index;
+       begin
+         (* move value  of variable to eax *)
+         match var_lookup context id with
+         (* TODO refactor these lines *)
+         | Context.Stack var_index -> Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index
+         | Context.Heap lbl -> Printf.fprintf chan "    movl _%s, %%eax\n" lbl
+       end
     | FunCall (ID id, args) ->
        let arg_count = List.length args in
        let _ =
@@ -183,6 +211,30 @@ let generate filename prog =
     | Some e -> generate_exp context e
   in
 
+  let generate_local_var context Ast.({ var_name=ID id; storage_class; init }) =
+    if Context.already_defined context id
+    then handle_error (Printf.sprintf "Variable %s declared twice in same scope" id)
+    else
+      match storage_class with
+      | Ast.Extern ->
+         (* TODO check this in context? *)
+         if init = None then
+           Context.add_extern_var context id
+         else
+           handle_error "extern local variable declaration with initializer"
+      | Ast.Static ->
+         Context.add_static_local_var context id init
+      | Ast.Nothing ->
+         let _ = match init with
+           (* TODO refactor generating initializer *)
+           | Some exp -> generate_exp context exp
+           | None -> () in
+         (* push value of var onto stack *)
+         let _ = print_asm "    push %%eax\n" in
+         Context.add_local_var context id
+  in
+
+(*
   let generate_declaration context Ast.({ var_type; init; var_name=ID id; }) =
     if Context.already_defined context id
     then handle_error (Printf.sprintf "Variable %s declared twice in same scope" id)
@@ -194,7 +246,7 @@ let generate filename prog =
       let _ = print_asm "    push %%eax\n" in
       Context.add_var context id
   in
-
+*)
   let rec generate_statement context statement =
     let context = Context.reset_scope context in
     match statement with
@@ -204,13 +256,14 @@ let generate filename prog =
     | DoWhile _ -> generate_do_while_loop context statement
     | Block block -> generate_block context block
     | If _ -> generate_if context statement
-    | Break -> generate_break context statement
-    | Continue -> generate_continue context statement
-    | Exp e -> generate_optional_exp context e
+    | Break -> generate_break context statement; context.var_decl_map
+    | Continue -> generate_continue context statement; context.var_decl_map
+    | Exp e -> generate_optional_exp context e; context.var_decl_map
     (* for return statements, variable map/stack index unchanged *)
     | ReturnVal exp ->
        let _ = generate_exp context exp in
-       emit_function_epilogue ()
+       emit_function_epilogue ();
+       context.var_decl_map
   (*
     for (i = 0; i < 5; i = i + 1) {
         statements
@@ -235,11 +288,15 @@ _post_loop:
     end
 
   and generate_for_decl_loop context Ast.(ForDecl { init ; cond ; post ; body }) =
-    (* add variable - for loop is new scope *)
-    let context' = generate_declaration context init in
-    loop_helper context' cond post body;
-    (* pop declared variable off the stack *)
-    print_asm "    pop %%eax\n"
+    if init.storage_class = Nothing then
+      (* add variable - for loop is new scope *)
+      let context' = generate_local_var context init in
+      let decl_map = loop_helper context' cond post body in
+      (* pop declared variable off the stack *)
+      let _ = print_asm "    pop %%eax\n" in
+      decl_map
+    else
+      handle_error "Declared non-local var in for loop"
 
   and generate_while_loop context Ast.(While { cond ; body }) =
     (* while loops don't have post expression *)
@@ -249,44 +306,56 @@ _post_loop:
     let loop_label = Util.unique_id "loop" in
     let post_loop_label = Util.unique_id "post_loop" in
     let continue_label = Util.unique_id "loop_continue" in
+    let _ =
+      begin
+        emit_label loop_label;
+        generate_exp context cond;
+        (* jump after loop if cond is false *)
+        print_asm "    cmp $0, %%eax\n";
+        Printf.fprintf chan "    je %s\n" post_loop_label;
+      end
+    in
+    (* evaluate loop body, which is a new scope *)
+    let decl_map =  generate_statement
+                      { context with
+                        break_label=Some post_loop_label;
+                        continue_label=Some continue_label
+                      }
+                      body
+    in
     begin
-      emit_label loop_label;
-      generate_exp context cond;
-      (* jump after loop if cond is false *)
-      print_asm "    cmp $0, %%eax\n";
-      Printf.fprintf chan "    je %s\n" post_loop_label;
-      (* evaluate loop body, which is a new scope *)
-      generate_statement { context with break_label=Some post_loop_label;
-                                        continue_label=Some continue_label
-        }
-        body;
       emit_label continue_label;
       (* evaluate post expression *)
       generate_optional_exp context post;
       (* execute loop again *)
       Printf.fprintf chan "    jmp %s\n" loop_label;
       (* label end of loop *)
-      emit_label post_loop_label
+      emit_label post_loop_label;
+      decl_map
     end
 
   and generate_do_while_loop context Ast.(DoWhile { body; cond }) =
     let loop_label = Util.unique_id "do_while" in
     let break_label = Util.unique_id "post_do_while" in
     let continue_label = Util.unique_id "continue_do_while" in
-    begin
+    let _ = emit_label loop_label in
+    let decl_map =
       (* do-while body *)
-      emit_label loop_label;
-      generate_statement { context with break_label=Some break_label;
-                                        continue_label=Some continue_label
+      generate_statement
+        { context with break_label=Some break_label;
+                       continue_label=Some continue_label
         }
-        body;
+        body
+    in
+    begin
       emit_label continue_label;
       (* evaluate condition *)
       generate_exp context cond;
       (* jump back to loop if cond is true *)
       print_asm "    cmp $0, %%eax\n";
       Printf.fprintf chan "    jne %s\n" loop_label;
-      emit_label break_label
+      emit_label break_label;
+      decl_map
     end
 
   and generate_break { break_label; } Ast.Break =
@@ -300,22 +369,24 @@ _post_loop:
     | None -> handle_error "Continue statement not in loop"
 
   and generate_block context = function
-    | [] -> let  bytes_to_deallocate = 4 * Set.cardinal context.current_scope in
-            (* pop any variables declared in this block off the stack *)
-            Printf.fprintf chan "    addl $%d, %%esp\n" bytes_to_deallocate
-    | Ast.Statement s::block_items -> begin
-        generate_statement context s;
-        generate_block context block_items
-      end
+    | [] ->
+       let  bytes_to_deallocate = 4 * Set.cardinal context.current_scope in
+       (* pop any variables declared in this block off the stack *)
+       let _ = Printf.fprintf chan "    addl $%d, %%esp\n" bytes_to_deallocate in
+       context.var_decl_map
+    | Ast.Statement s::block_items ->
+       let decl_map_1 = generate_statement context s in
+       let decl_map_2 = generate_block context block_items in
+       Map.union decl_map_1 decl_map_2
     | Ast.Decl d::block_items ->
-       let context' = generate_declaration context d in
+       let context' = generate_local_var context d in
        generate_block context' block_items
 
   and generate_if context Ast.(If { cond; if_body; else_body }) =
     (* evaluate condition *)
     let _ = generate_exp context cond in
     let post_if_label = Util.unique_id "post_if" in
-    let _ = begin
+    let if_decl_map = begin
         (* stuff that's the same whether or not there's an else block *)
         (* compare cond to false *)
         print_asm "    cmp     $0, %%eax\n";
@@ -324,53 +395,121 @@ _post_loop:
         (* generate if body *)
         generate_statement context if_body
       end in
-    begin
-      match else_body with
-      (* handle else, if present *)
-      | Some else_statement ->
-         let post_else_label = Util.unique_id "post_else" in
-         begin
-           (* We're at end of if statement, need to jump over the else statement *)
-           Printf.fprintf chan "    jmp     %s\n" post_else_label;
-           (* now print out label after if statement *)
-           emit_label post_if_label;
-           (* now generate else statement *)
-           generate_statement context else_statement;
-           (* now print post-else label *)
-           emit_label post_else_label
-         end
-      | None ->
-         (* print out label that comes after if statement *)
-         emit_label post_if_label
-    end
+    let else_decl_map = begin
+        match else_body with
+        (* handle else, if present *)
+        | Some else_statement ->
+           let post_else_label = Util.unique_id "post_else" in
+           let _ =
+             begin
+               (* We're at end of if statement, need to jump over the else statement *)
+               Printf.fprintf chan "    jmp     %s\n" post_else_label;
+               (* now print out label after if statement *)
+               emit_label post_if_label;
+             end
+           in
+           let decl_map =
+             (* now generate else statement *)
+             generate_statement context else_statement;
+           in
+           begin
+             (* now print post-else label *)
+             emit_label post_else_label;
+             decl_map
+           end
+        | None ->
+           begin
+             (* print out label that comes after if statement *)
+             emit_label post_if_label;
+             context.var_decl_map
+           end
+      end
+    in
+    Map.union if_decl_map else_decl_map
   in
 
-  let generate_fun Ast.(FunDecl { fun_type; name=ID fun_name; params; body }) =
+  let generate_fun global_ctx Ast.(FunDecl { fun_type; name=ID fun_name; params; body }) =
     match body with
     | Some body ->
        let _ = begin
+           print_asm "    .text\n";
            Printf.fprintf chan "    .globl _%s\n" fun_name;
            Printf.fprintf chan "_%s:\n" fun_name;
            print_asm "    push %%ebp\n";
            print_asm "    movl %%esp, %%ebp\n"
          end
        in
-       let context = Context.initialize params
-       in
+       let context = Context.init_for_fun global_ctx params in
+       let heap_decls = generate_block context body in
        begin
-         generate_block context body;
          (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
          print_asm "    movl $0, %%eax\n";
-         emit_function_epilogue ()
+         emit_function_epilogue ();
+         emit_local_heap_decls heap_decls
        end
     | None -> ()
   in
 
-  let rec generate_funs = function
-    | [] -> ()
-    | f::fs -> generate_fun f; generate_funs fs  in
+  let combine_inits maybe_decl Ast.({ init; }) =
+    let init_val = Context.get_const init in
+    match maybe_decl with
+    | None -> init_val
+    | Some (Context.HeapDecl (_, prev_init)) ->
+       begin
+         match init_val, prev_init with
+         | Some _, None -> init_val
+         | None, Some _ -> prev_init
+         | None, None -> None
+         | Some _, Some _ -> handle_error "multiple variable definitions"
+       end
+  in
+
+  let combine_linkage maybe_decl Ast.({ storage_class }) =
+    Ast.(
+      Context.(
+        match maybe_decl with
+        | None ->
+           begin
+             match storage_class with
+             | Static -> Internal
+             | _ -> External
+           end
+      | Some (HeapDecl (current_linkage, _)) ->
+         begin
+           match current_linkage, storage_class with
+           | Nothing, _ -> failwith "global var has no linkage"
+           | External, Static -> handle_error "static declaration after non-static"
+           | Internal, Nothing -> handle_error "non_static declaration after static"
+           | _, _ -> current_linkage
+         end
+      )
+    )
+  in
+
+  let generate_global_var context v =
+    let current_decl = Context.opt_var_decl_lookup context v in
+    let init = combine_inits current_decl v in
+    let linkage = combine_linkage current_decl v in
+    let updated_decl = Context.HeapDecl (linkage, init) in
+    Context.add_global_var context v updated_decl
+  in
+
+  let generate_tl global_ctx = function
+      (* function declaration can add variables to heap but not to global scope *)
+    | (Ast.FunDecl _) as f -> generate_fun global_ctx f; global_ctx
+    | Ast.GlobalVar gv -> generate_global_var global_ctx gv
+  in
+
+  let rec generate_tls global_ctx = function
+    | [] -> Context.(emit_global_heap_decls global_ctx.var_decl_map)
+    | tl::tls ->
+       (* TODO: use List.fold *)
+       let global_ctx' = generate_tl global_ctx tl in
+       generate_tls global_ctx' tls
+  in
 
   match prog with
-  | Ast.Prog fun_list ->
-     let _ = generate_funs fun_list in
+  | Ast.Prog tl_list ->
+     let global_ctx = Context.empty in
+     let _ = generate_tls global_ctx tl_list in
      close_out chan

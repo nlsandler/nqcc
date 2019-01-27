@@ -63,6 +63,8 @@ let get_id t =
   match t with
   | "return" -> ReturnKeyword
   | "int" -> IntKeyword
+  | "static" -> StaticKeyword
+  | "extern" -> ExternKeyword
   | "char" -> CharKeyword
   | "if" -> IfKeyword
   | "else" -> ElseKeyword

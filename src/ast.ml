@@ -44,10 +44,13 @@ type exp =
   | Assign of assign_op * id * exp
   | FunCall of id * exp list
 
+type storage_class = Static | Extern | Nothing
 type declaration =
   { var_type: type_def;
     var_name: id;
     init: exp option;
+    storage_class: storage_class; (* this is ALSO true for global vars without static kw *)
+    (* global: bool; *) (* global vars w/out static kw *)
   }
 
 type block_item =
@@ -70,11 +73,13 @@ and statement =
 
 type fun_param = Param of type_def * id
 
-type fun_decl =
-  FunDecl of { fun_type: type_def;
-               name: id;
-               params: fun_param list;
-               body: block option;
-             }
+type top_level =
+  | FunDecl of { fun_type: type_def;
+                 name: id;
+                 storage_class: storage_class;
+                 params: fun_param list;
+                 body: block option;
+               }
+  | GlobalVar of declaration
 
-type prog = Prog of fun_decl list
+type prog = Prog of top_level list

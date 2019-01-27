@@ -6,5 +6,5 @@ if [[ $? != 0 ]]; then
 fi
 base="${1%.*}"
 assembly=$base".s"
-gcc -m32 $assembly -o $base
+gcc-8 -m32 $assembly -o $base #2> /dev/null
 rm $assembly

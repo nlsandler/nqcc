@@ -178,12 +178,10 @@ let parse_optional_exp fun_map next_expected toks =
     else
       failwith "Didn't get expected token after exp"
 
-let parse_declaration fun_map var_type = function
-  | Tok.Id varname::rest ->
-     let var_id = Ast.ID varname in
+let parse_rest_of_declaration fun_map var_id var_type storage_class tokens =
      let init, rest =
-       match rest with
-       | Tok.Semicolon::rest_of_statements -> None, rest
+       match tokens with
+       | Tok.Semicolon::_ -> None, tokens
        | Tok.Eq::rest ->
           let exp, rest = parse_expression fun_map rest in
           Some exp, rest
@@ -193,6 +191,7 @@ let parse_declaration fun_map var_type = function
            var_type = var_type;
            var_name = var_id;
            init = init;
+           storage_class = storage_class;
                        }
      in
      begin
@@ -200,7 +199,16 @@ let parse_declaration fun_map var_type = function
        | Tok.Semicolon::rest -> declaration, rest
        | _ -> failwith "Expected semicolon after declaration"
      end
-  | _ -> failwith "Invalid variable declaration"
+
+let parse_declaration fun_map tokens =
+  let storage_class, rest = match tokens with
+      | Tok.StaticKeyword::rest -> Ast.Static, rest
+      | Tok.ExternKeyword::rest -> Ast.Extern, rest
+      | _ -> Ast.Nothing, tokens
+  in
+  match rest with
+  | (Tok.IntKeyword::Tok.Id varname::rest) -> parse_rest_of_declaration fun_map (Ast.ID varname) Ast.IntType storage_class rest
+  | _ -> failwith (Printf.sprintf "Unexpected keyword %s" (Lex.tok_to_string (List.hd rest)))
 
 let parse_function_body fun_map toks =
   let parse_return_statement stmt =
@@ -244,9 +252,9 @@ let parse_function_body fun_map toks =
     cond, post, body, rest
 
   and parse_for_statement = function
-    | Tok.(OpenParen::IntKeyword::toks) ->
+    | Tok.(OpenParen::((IntKeyword::_) as decl_toks)) ->
        (* for loop w/ variable declaration *)
-       let init, rest = parse_declaration fun_map Ast.IntType toks in
+       let init, rest = parse_declaration fun_map decl_toks in
        let cond, post, body, rest = parse_for_components rest in
        Ast.ForDecl { init; cond; post; body }, rest
     | Tok.OpenParen::toks ->
@@ -298,13 +306,19 @@ let parse_function_body fun_map toks =
      let exp, rest = parse_optional_exp fun_map Tok.Semicolon toks in
      Ast.Exp exp, rest
 
-  and parse_block_item = function
-    | Tok.IntKeyword::tokens ->
-       let decl, rest = parse_declaration fun_map Ast.IntType tokens in
-       Ast.Decl decl, rest
-    | tokens ->
-       let stmt, rest = parse_statement tokens in
-       Ast.Statement stmt, rest
+  and parse_block_item tokens =
+    let is_declaration = match tokens with
+      | Tok.StaticKeyword::_ -> true
+      | Tok.ExternKeyword::_ -> true
+      | Tok.IntKeyword::_ -> true
+      | _ -> false
+    in
+    if is_declaration then
+      let decl, rest = parse_declaration fun_map tokens in
+      Ast.Decl decl, rest
+    else
+      let stmt, rest = parse_statement tokens in
+      Ast.Statement stmt, rest
 
   and parse_block_item_list tokens =
     if (List.hd tokens) == Tok.CloseBrace
@@ -335,13 +349,9 @@ let rec parse_fun_params = function
        | _ -> failwith "Invalid list of parameters"
      in param::params, rest
 
-let parse_fun fun_map tokens =
-  let fun_type, name, rest =
-    match tokens with
-    | Tok.(IntKeyword::Id name::OpenParen::rest) -> Ast.(IntType, ID name, rest)
-    | Tok.(CharKeyword::Id name::OpenParen::rest) -> Ast.(CharType, ID name, rest)
-    | _ -> failwith "Parse error in parse_fun: bad function type or name" in
-  let params, rest = parse_fun_params rest in
+let parse_fun fun_type name storage_class fun_map tokens =
+  (* we've already parsed everything up to open paren *)
+  let params, rest = parse_fun_params tokens in
   let nparams = List.length params in
   let has_body =
     match rest with
@@ -371,16 +381,36 @@ let parse_fun fun_map tokens =
     | Tok.Semicolon::rest' -> None, rest'
     | _ -> failwith "Unexpected token after function declaration"
   in
-  let decl = Ast.FunDecl { fun_type; name; params; body=opt_body } in
+  let decl = Ast.FunDecl { fun_type; name; storage_class; params; body=opt_body } in
   decl, fun_map', rest
 
-let rec parse_funs fun_map = function
+let parse_top_level fun_map tokens =
+  let storage_class, after_storage_class =
+    match tokens with
+      | Tok.StaticKeyword::toks -> Ast.Static, toks
+      | Tok.ExternKeyword::toks -> Ast.Extern, toks
+      | otherwise -> Ast.Nothing, tokens
+  in
+  let tl_type, tl_name, after_id =
+    match after_storage_class with
+      | Tok.(IntKeyword::Id name::rest) -> Ast.(IntType, ID name, rest)
+      | Tok.(CharKeyword::Id name::rest) -> Ast.(CharType, ID name, rest)
+      | _ -> failwith "Parse error in parse_top_level: bad toplevel name or top"
+  in
+  let Ast.ID name = tl_name in
+  match after_id with
+    | Tok.OpenParen::rest -> parse_fun tl_type tl_name storage_class fun_map rest
+    | other ->
+       let decl, rest = parse_rest_of_declaration fun_map tl_name tl_type storage_class after_id in
+       (Ast.GlobalVar decl, fun_map, rest)
+
+let rec parse_top_levels fun_map = function
   | [] -> [] (* no functions left to parse *)
   | tokens ->
-     let f, fun_map', rest = parse_fun fun_map tokens in
-     let fs = parse_funs fun_map' rest in
-     f::fs
+     let tl, fun_map', rest = parse_top_level fun_map tokens in
+     let tls = parse_top_levels fun_map' rest in
+     tl::tls
 
 let parse tokens =
   let fun_map = Map.empty in
-  Ast.Prog (parse_funs fun_map tokens)
+  Ast.Prog (parse_top_levels fun_map tokens)
