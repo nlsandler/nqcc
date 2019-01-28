@@ -63,18 +63,17 @@ let init_for_fun { var_map } params =
 let already_defined { current_scope; } id = Set.mem id current_scope
 let reset_scope context = { context with current_scope=Set.empty }
 
-(* TODO: prob doesn't belong here since gen.ml uses it *)
 let get_init on_err = function
   | None -> Tentative
   | Some (Ast.Const c) ->
      begin
        match c with
        | Ast.Int i -> Final i
-       (* TODO: better error handling here! *)
        | _ -> on_err "non-int initializers not implemented"
      end
   | _ -> on_err "non-constant initializer"
 
+(* TODO: prob doesn't belong here since gen.ml uses it *)
 let get_var_init on_err Ast.({ init; storage_class; }) =
   match (get_init on_err init) with
   | Tentative ->
@@ -87,7 +86,7 @@ let finalize_init = function
   | Tentative -> Final 0
   | a -> a
 
-let add_extern_var ({ var_map; current_scope; } as context) id =
+let add_local_extern_var ({ var_map; current_scope; } as context) id =
   let var_label = "_"^id in
   { context with
     var_map=Map.add id (Heap var_label) var_map;

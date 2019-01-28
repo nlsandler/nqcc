@@ -6,7 +6,7 @@ let generate filename prog =
   let filename_asm = String.splice filename (-1) 1 "s" in
   let chan = open_out filename_asm in
   (* TODO: add newline! *)
-  let print_asm = Printf.fprintf chan in
+  let print_asm = Printf.fprintf chan "%s\n" in
 
   let handle_error message = begin
       Printf.printf "ERROR: %s\n" message;
@@ -21,16 +21,16 @@ let generate filename prog =
 
   let emit_comparison set_instruction =
     begin
-      print_asm "    cmp %%ecx, %%eax\n";
-      print_asm "    movl $0, %%eax\n";
+      print_asm "    cmp %ecx, %eax";
+      print_asm "    movl $0, %eax";
       Printf.fprintf chan "    %s %%al\n" set_instruction
     end in
 
   let emit_function_epilogue () =
     begin
-      print_asm "    movl %%ebp, %%esp\n";
-      print_asm "    pop %%ebp\n";
-      print_asm "    ret\n"
+      print_asm "    movl %ebp, %esp";
+      print_asm "    pop %ebp";
+      print_asm "    ret"
     end in
 
   let emit_bin_op op =
@@ -39,25 +39,25 @@ let generate filename prog =
     | Div ->
        (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
        begin
-         print_asm "    xor %%edx, %%edx\n";
-         print_asm "    idivl %%ecx\n";
+         print_asm "    xor %edx, %edx";
+         print_asm "    idivl %ecx";
        end
     | Mod ->
        (* zero out edx (b/c idivl operand calculates 64-bit value edx:eax / operand) *)
        begin
-         print_asm "    xor %%edx, %%edx\n";
-         print_asm "    idivl %%ecx\n";
+         print_asm "    xor %edx, %edx";
+         print_asm "    idivl %ecx";
          (* remainder stored in edx, move it to eax *)
-         print_asm "    movl %%edx, %%eax\n"
+         print_asm "    movl %edx, %eax"
        end
-    | Sub -> print_asm "    subl %%ecx, %%eax\n"
-    | Add -> print_asm "    addl %%ecx, %%eax\n";
-    | Mult -> print_asm "    imul %%ecx, %%eax\n";
-    | Xor -> print_asm "    xor %%ecx, %%eax\n";
-    | BitAnd -> print_asm "    and %%ecx, %%eax\n";
-    | BitOr -> print_asm "    or %%ecx, %%eax\n";
-    | ShiftL -> print_asm "    sall %%cl, %%eax\n";
-    | ShiftR -> print_asm "    sarl %%cl, %%eax\n";
+    | Sub -> print_asm "    subl %ecx, %eax"
+    | Add -> print_asm "    addl %ecx, %eax";
+    | Mult -> print_asm "    imul %ecx, %eax";
+    | Xor -> print_asm "    xor %ecx, %eax";
+    | BitAnd -> print_asm "    and %ecx, %eax";
+    | BitOr -> print_asm "    or %ecx, %eax";
+    | ShiftL -> print_asm "    sall %cl, %eax";
+    | ShiftR -> print_asm "    sarl %cl, %eax";
     | Eq -> emit_comparison "sete"
     | Neq -> emit_comparison "setne"
     | Lt -> emit_comparison "setl"
@@ -66,38 +66,39 @@ let generate filename prog =
     | Ge -> emit_comparison "setge"
     | Or ->
        begin
-         print_asm "    orl %%eax, %%ecx\n";
-         print_asm "    movl $0, %%eax\n";
-         print_asm "    setne %%al\n"
+         print_asm "    orl %eax, %ecx";
+         print_asm "    movl $0, %eax";
+         print_asm "    setne %al"
        end
     | And ->
        begin
          (* if eax != 0, set al = 1 *)
-         print_asm "    cmp $0, %%eax\n";
-         print_asm "    movl $0, %%eax\n"; (* zero this b/c we'll store result in it*)
-         print_asm "    setne %%al\n";
+         print_asm "    cmp $0, %eax";
+         print_asm "    movl $0, %eax"; (* zero this b/c we'll store result in it*)
+         print_asm "    setne %al";
          (* if ecx != 0, set cl = 1 *)
-         print_asm "    cmp $0, %%ecx\n";
-         print_asm "    setne %%cl\n";
+         print_asm "    cmp $0, %ecx";
+         print_asm "    setne %cl";
          (* eax = al && cl *)
-         print_asm "    andb %%cl, %%al\n"
+         print_asm "    andb %cl, %al"
        end in
 
   (* TODO refactor a lot of these print functions, e.g. align *)
-  let emit_local_heap_decl lbl heap_decl =
-    let Context.(HeapDecl (_, Final init)) = heap_decl in
-    if init = 0 then
-      begin
-        print_asm "    .text\n";
-        Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
-      end
-    else
-      begin
-        print_asm "    .data\n";
-        print_asm "    .align 2\n";
-        Printf.fprintf chan "_%s:\n" lbl;
+  let emit_local_heap_decl lbl = function
+    | Context.(HeapDecl (_, Final init)) ->
+       if init = 0 then
+         begin
+           print_asm "    .text";
+           Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
+         end
+       else
+         begin
+           print_asm "    .data";
+           print_asm "    .align 2";
+           Printf.fprintf chan "_%s:\n" lbl;
         Printf.fprintf chan "    .long %d\n" init
-      end
+         end
+    | other -> failwith "tentative definition of local var"
   in
 
   let emit_local_heap_decls = Map.iter emit_local_heap_decl in
@@ -116,24 +117,25 @@ let generate filename prog =
        if linkg = External then
          (* allocate space in .comm - NOTE different on Linux! *)
          begin
-           print_asm "    .text\n";
+           print_asm "    .text";
            Printf.fprintf chan "    .comm _%s,4,2\n" lbl
          end
        else
          (* allocate space in bss *)
          begin
-           print_asm "    .text\n";
+           print_asm "    .text";
            Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
          end
     | Final i ->
        begin
-         print_asm "    .text\n";
+         print_asm "    .text";
          print_globl_if_extern ();
-         print_asm "    .data\n";
-         print_asm "    .align 2\n";
+         print_asm "    .data";
+         print_asm "    .align 2";
          Printf.fprintf chan "_%s:\n" lbl;
          Printf.fprintf chan "    .long %d\n" i
        end
+    | Tentative -> failwith "failed to finalize tentative def"
   in
 
   let emit_global_heap_decls = Map.iter emit_global_heap_decl in
@@ -145,7 +147,6 @@ let generate filename prog =
        (* get location of variable in memory *)
        begin
          match var_lookup context id with
-         (* TODO refactor these liens *)
          | Context.Stack var_index -> Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
          | Context.Heap lbl -> Printf.fprintf chan "    movl %%eax, _%s\n" lbl
        end
@@ -157,7 +158,7 @@ let generate filename prog =
          (* calculate cond *)
          generate_exp context e1;
          (* is cond true? *)
-         print_asm "    cmp   $0, %%eax\n";
+         print_asm "    cmp   $0, %eax";
          (* if it's false, jump to 'else' exp *)
          Printf.fprintf chan "    je   %s\n" e3_label;
          (* Generate 'if' block *)
@@ -175,12 +176,12 @@ let generate filename prog =
        begin
          (* calculate e1 and e2 *)
          generate_exp context e1;
-         print_asm "    push %%eax\n";
+         print_asm "    push %eax";
          generate_exp context e2;
          (* op s, d computes d = op(d,s), so put e2 in ecx, e1 in eax *)
-         print_asm "    movl %%eax, %%ecx\n";
+         print_asm "    movl %eax, %ecx";
          (* Put e1 in eax (where it needs to be for idiv) *)
-         print_asm  "    pop %%eax\n";
+         print_asm  "    pop %eax";
          (* perform operation *)
          emit_bin_op op
        end
@@ -189,18 +190,17 @@ let generate filename prog =
        begin
          match op with
          | Pos -> ()(* No-op for now - eventually handle casting to int if needed *)
-         | Negate -> print_asm "    neg %%eax\n";
-         | Complement -> print_asm "    not %%eax\n";
+         | Negate -> print_asm "    neg %eax";
+         | Complement -> print_asm "    not %eax";
          | Not ->
-            print_asm "    cmpl $0, %%eax\n";     (* compare eax to 0 *)
-            print_asm "    movl $0, %%eax\n";     (* set eax to 0 *)
-            print_asm "    sete %%al\n";         (* if eax was zero in earlier comparison, set al to 1 *)
+            print_asm "    cmpl $0, %eax";     (* compare eax to 0 *)
+            print_asm "    movl $0, %eax";     (* set eax to 0 *)
+            print_asm "    sete %al";         (* if eax was zero in earlier comparison, set al to 1 *)
        end
     | Var (ID id) ->
        begin
          (* move value  of variable to eax *)
          match var_lookup context id with
-         (* TODO refactor these lines *)
          | Context.Stack var_index -> Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index
          | Context.Heap lbl -> Printf.fprintf chan "    movl _%s, %%eax\n" lbl
        end
@@ -209,14 +209,14 @@ let generate filename prog =
        let _ =
          (* edx = (esp - 4*(arg_count + 1)) % 16 *)
          (* the + 1 is for saved remainder *)
-         print_asm "    movl %%esp, %%eax\n";
+         print_asm "    movl %esp, %eax";
          Printf.fprintf chan "    subl $%d, %%eax\n" (4*(arg_count + 1));
-         print_asm "    xorl %%edx, %%edx\n";
-         print_asm "    movl $0x20, %%ecx\n";
-         print_asm "    idivl %%ecx\n";
+         print_asm "    xorl %edx, %edx";
+         print_asm "    movl $0x20, %ecx";
+         print_asm "    idivl %ecx";
          (* edx contains the remainder, i.e. # of bytes to subtract *)
-         print_asm "    subl %%edx, %%esp\n";
-         print_asm "    pushl %%edx\n" (* need it for deallocating *)
+         print_asm "    subl %edx, %esp";
+         print_asm "    pushl %edx" (* need it for deallocating *)
        in
        let _ = put_args_on_stack context args in
        begin
@@ -225,8 +225,8 @@ let generate filename prog =
          (* deallocate args *)
          Printf.fprintf chan "    addl $%d, %%esp\n" (arg_count * 4);
          (* pop remainder off stack, undo 16-byte alignment *)
-         print_asm "    popl %%edx\n";
-         print_asm "    addl %%edx, %%esp\n"
+         print_asm "    popl %edx";
+         print_asm "    addl %edx, %esp"
        end
     | Const (Int i) ->
       Printf.fprintf chan "    movl    $%d, %%eax\n" i
@@ -237,7 +237,7 @@ let generate filename prog =
   and put_args_on_stack context args =
     let push_arg arg =
       generate_exp context arg;
-      print_asm "    pushl %%eax\n";
+      print_asm "    pushl %eax";
     in
     List.iter push_arg (List.rev args)
   in
@@ -255,34 +255,20 @@ let generate filename prog =
       | Ast.Extern ->
          (* TODO check this in context? *)
          if init = None then
-           Context.add_extern_var context id
+           Context.add_local_extern_var context id
          else
            handle_error "extern local variable declaration with initializer"
       | Ast.Static ->
          Context.add_static_local_var handle_error context id init
       | Ast.Nothing ->
          let _ = match init with
-           (* TODO refactor generating initializer *)
            | Some exp -> generate_exp context exp
            | None -> () in
          (* push value of var onto stack *)
-         let _ = print_asm "    push %%eax\n" in
+         let _ = print_asm "    push %eax" in
          Context.add_local_var context id
   in
 
-(*
-  let generate_declaration context Ast.({ var_type; init; var_name=ID id; }) =
-    if Context.already_defined context id
-    then handle_error (Printf.sprintf "Variable %s declared twice in same scope" id)
-    else
-      let _ = match init with
-        | Some exp -> generate_exp context exp
-        | None -> () in
-      (* push value of var onto stack *)
-      let _ = print_asm "    push %%eax\n" in
-      Context.add_var context id
-  in
-*)
   let rec generate_statement context statement =
     let context = Context.reset_scope context in
     match statement with
@@ -329,7 +315,7 @@ _post_loop:
       let context' = generate_local_var context init in
       let decl_map = loop_helper context' cond post body in
       (* pop declared variable off the stack *)
-      let _ = print_asm "    pop %%eax\n" in
+      let _ = print_asm "    pop %eax" in
       decl_map
     else
       handle_error "Declared non-local var in for loop"
@@ -347,7 +333,7 @@ _post_loop:
         emit_label loop_label;
         generate_exp context cond;
         (* jump after loop if cond is false *)
-        print_asm "    cmp $0, %%eax\n";
+        print_asm "    cmp $0, %eax";
         Printf.fprintf chan "    je %s\n" post_loop_label;
       end
     in
@@ -388,7 +374,7 @@ _post_loop:
       (* evaluate condition *)
       generate_exp context cond;
       (* jump back to loop if cond is true *)
-      print_asm "    cmp $0, %%eax\n";
+      print_asm "    cmp $0, %eax";
       Printf.fprintf chan "    jne %s\n" loop_label;
       emit_label break_label;
       decl_map
@@ -425,7 +411,7 @@ _post_loop:
     let if_decl_map = begin
         (* stuff that's the same whether or not there's an else block *)
         (* compare cond to false *)
-        print_asm "    cmp     $0, %%eax\n";
+        print_asm "    cmp     $0, %eax";
         (* if cond is false, jump over if body *)
         Printf.fprintf chan "    je      %s\n" post_if_label;
         (* generate if body *)
@@ -468,18 +454,18 @@ _post_loop:
     match body with
     | Some body ->
        let _ = begin
-           print_asm "    .text\n";
+           print_asm "    .text";
            Printf.fprintf chan "    .globl _%s\n" fun_name;
            Printf.fprintf chan "_%s:\n" fun_name;
-           print_asm "    push %%ebp\n";
-           print_asm "    movl %%esp, %%ebp\n"
+           print_asm "    push %ebp";
+           print_asm "    movl %esp, %ebp"
          end
        in
        let context = Context.init_for_fun global_ctx params in
        let heap_decls = generate_block context body in
        begin
          (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
-         print_asm "    movl $0, %%eax\n";
+         print_asm "    movl $0, %eax";
          emit_function_epilogue ();
          emit_local_heap_decls heap_decls
        end
