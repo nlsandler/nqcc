@@ -10,18 +10,24 @@ type initial =
   | Tentative (* defaults to 0 *)
   | NoDef
 
-type address =
-  | Stack of int   (* offset on stack *)
-  | Heap of string (* label *)
+type fun_decl = int * linkage * bool
 
-type heap_decl = HeapDecl of linkage * initial
+type symbol =
+  | Stack of int   (* local var - offset on stack *)
+  | Heap of string (* global or static var - label *)
+  | Fun of int (* number of params *)
+
+type decl =
+  | HeapDecl of linkage * initial
+  (* number of params, linkage, whether defined yet *)
+  | FunDecl of int * linkage * bool
 
 (* A record for all the stuff we have to pass around during code generation *)
 type t = {
     (* map variable name to address *)
-    var_map        : (string, address) Map.t;
+    var_map        : (string, symbol) Map.t;
     (* map memory location label to declaration info for vars on heap *)
-    var_decl_map   : (string, heap_decl) Map.t;
+    var_decl_map   : (string, decl) Map.t;
     current_scope  : string Set.t;
     stack_index    : int;
     break_label    : string option;
@@ -100,6 +106,13 @@ let add_global_var ({ var_map; var_decl_map } as context) Ast.({ var_name=ID id 
     var_decl_map=Map.add label decl var_decl_map
   }
 
+let add_function ({ var_map; var_decl_map } as context) Ast.({ params; name=ID id}) decl =
+  let label = "_"^id in
+  { context with
+    var_map=Map.add id (Fun (List.length params)) var_map;
+    var_decl_map=Map.add label decl var_decl_map
+  }
+
 let add_static_local_var on_err ({ var_map; var_decl_map; current_scope; } as context) id init =
   let label = Util.unique_id id in
   let init' = finalize_init (get_init on_err init) in
@@ -121,9 +134,9 @@ let var_lookup err_handler { var_map } var =
   try
     Map.find var var_map
   with
-  | Not_found -> err_handler (Printf.sprintf "undeclared variable %s" var)
+  | Not_found -> err_handler (Printf.sprintf "undeclared identifier %s" var)
 
-let opt_var_decl_lookup { var_decl_map } Ast.({ var_name=ID id }) =
+let opt_decl_lookup { var_decl_map } (Ast.ID id) =
   try
     Some (Map.find ("_"^id) var_decl_map)
   with

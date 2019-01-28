@@ -17,6 +17,15 @@ let generate filename prog =
 
   let var_lookup = Context.var_lookup handle_error in
 
+  let validate_fun_call context fun_name arg_count =
+    match var_lookup context fun_name with
+    | Context.Fun i ->
+       if i <> arg_count then
+         handle_error "called function with wrong number of arguments"
+       else ()
+    | _ -> handle_error "tried to call identifier that isn't a function"
+  in
+
   let emit_label label = Printf.fprintf chan "%s:\n" label in
 
   let emit_comparison set_instruction =
@@ -103,39 +112,44 @@ let generate filename prog =
 
   let emit_local_heap_decls = Map.iter emit_local_heap_decl in
 
-  let emit_global_heap_decl lbl (Context.HeapDecl (linkg, init)) =
-    let open Context in
-    let print_globl_if_extern _ =
-      if linkg = External
-      then Printf.fprintf chan "    .globl _%s\n" lbl
-      else ()
-    in
-    let init' = finalize_init init in
-    match init' with
-    | NoDef -> ()
-    | Final 0 ->
-       if linkg = External then
-         (* allocate space in .comm - NOTE different on Linux! *)
-         begin
-           print_asm "    .text";
-           Printf.fprintf chan "    .comm _%s,4,2\n" lbl
-         end
-       else
-         (* allocate space in bss *)
-         begin
-           print_asm "    .text";
-           Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
-         end
-    | Final i ->
-       begin
-         print_asm "    .text";
-         print_globl_if_extern ();
-         print_asm "    .data";
-         print_asm "    .align 2";
-         Printf.fprintf chan "_%s:\n" lbl;
-         Printf.fprintf chan "    .long %d\n" i
-       end
-    | Tentative -> failwith "failed to finalize tentative def"
+  let print_globl_if_extern linkg lbl =
+    if linkg = Context.External
+    then Printf.fprintf chan "    .globl _%s\n" lbl
+    else ()
+  in
+
+  let emit_global_heap_decl lbl = function
+    | Context.HeapDecl (linkg, init) ->
+        let open Context in
+        let init' = finalize_init init in
+        begin
+          match init' with
+          | NoDef -> ()
+          | Final 0 ->
+             if linkg = External then
+               (* allocate space in .comm - NOTE different on Linux! *)
+               begin
+                 print_asm "    .text";
+                 Printf.fprintf chan "    .comm _%s,4,2\n" lbl
+               end
+             else
+               (* allocate space in bss *)
+               begin
+                 print_asm "    .text";
+                 Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
+               end
+          | Final i ->
+             begin
+               print_asm "    .text";
+               print_globl_if_extern linkg lbl;
+               print_asm "    .data";
+               print_asm "    .align 2";
+               Printf.fprintf chan "_%s:\n" lbl;
+               Printf.fprintf chan "    .long %d\n" i
+             end
+          | Tentative -> failwith "failed to finalize tentative def"
+        end
+    | _ -> () (* function declaration - already handled *)
   in
 
   let emit_global_heap_decls = Map.iter emit_global_heap_decl in
@@ -149,6 +163,7 @@ let generate filename prog =
          match var_lookup context id with
          | Context.Stack var_index -> Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
          | Context.Heap lbl -> Printf.fprintf chan "    movl %%eax, _%s\n" lbl
+         | Context.Fun _ -> handle_error "tried to assign function to variable"
        end
 
     | TernOp (e1, e2, e3) ->
@@ -203,9 +218,12 @@ let generate filename prog =
          match var_lookup context id with
          | Context.Stack var_index -> Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index
          | Context.Heap lbl -> Printf.fprintf chan "    movl _%s, %%eax\n" lbl
+         (* NOTE: this does not actually violate the spec *)
+         | Context.Fun _ -> handle_error "Trying to reference function as variable"
        end
     | FunCall (ID id, args) ->
        let arg_count = List.length args in
+       let _ = validate_fun_call context id arg_count in
        let _ =
          (* edx = (esp - 4*(arg_count + 1)) % 16 *)
          (* the + 1 is for saved remainder *)
@@ -450,77 +468,124 @@ _post_loop:
     Map.union if_decl_map else_decl_map
   in
 
-  let generate_fun global_ctx Ast.(FunDecl { fun_type; name=ID fun_name; params; body }) =
-    match body with
-    | Some body ->
-       let _ = begin
-           print_asm "    .text";
-           Printf.fprintf chan "    .globl _%s\n" fun_name;
-           Printf.fprintf chan "_%s:\n" fun_name;
-           print_asm "    push %ebp";
-           print_asm "    movl %esp, %ebp"
-         end
-       in
-       let context = Context.init_for_fun global_ctx params in
-       let heap_decls = generate_block context body in
-       begin
-         (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
-         print_asm "    movl $0, %eax";
-         emit_function_epilogue ();
-         emit_local_heap_decls heap_decls
-       end
-    | None -> ()
+  let combine_linkages linkg storage_class =
+    let open Context in
+    match (linkg, storage_class) with
+    | Nothing, _ -> failwith "global object has no linkage"
+    | External, Ast.Static -> handle_error "static declaration after non-static"
+    | Internal, Nothing -> handle_error "non_static declaration after static"
+    | _, _ -> linkg
   in
 
-  let combine_inits maybe_decl v =
+  let update_ctx_for_f ctx f =
+    let open Ast in
+    let open Context in
+    let has_body = f.body <> None in
+    let n_params = List.length f.params in
+    let storage_class =
+      (* 6.2.2.5 *)
+      if f.storage_class = Ast.Nothing
+      then Extern
+      else f.storage_class
+    in
+    let updated_decl =
+      match opt_decl_lookup ctx f.name with
+      | None ->
+         let linkg =
+           if storage_class = Static
+           then Internal
+           else External
+         in
+         FunDecl (n_params, linkg, has_body)
+      | Some (FunDecl (current_params, current_linkg, current_body)) ->
+         if current_params <> n_params then
+           handle_error "Function declared with different signatures"
+         else if current_body && has_body then
+           handle_error "multiple function definitions"
+         else
+           let linkg = combine_linkages current_linkg storage_class in
+           FunDecl (n_params, linkg, current_body || has_body)
+      | Some HeapDecl _ -> handle_error "variable redefined as function"
+    in
+    (Context.add_function ctx f updated_decl, updated_decl)
+  in
+
+  let generate_fun global_ctx f =
+    let (global_ctx', f_decl) = update_ctx_for_f global_ctx f in
+    let Context.FunDecl (_, f_linkg, _) = f_decl in
+    let Ast.ID fun_name = f.name in
+    begin
+      match f.body with
+      | Some body ->
+         let _ = begin
+             print_asm "    .text";
+             print_globl_if_extern f_linkg fun_name;
+             Printf.fprintf chan "_%s:\n" fun_name;
+             print_asm "    push %ebp";
+             print_asm "    movl %esp, %ebp"
+           end
+         in
+         let context = Context.init_for_fun global_ctx' f.params in
+         let heap_decls = generate_block context body in
+         begin
+           (* set eax to 0 and generate function epilogue and ret, so function returns 0 even if missing return statement *)
+           print_asm "    movl $0, %eax";
+           emit_function_epilogue ();
+           emit_local_heap_decls heap_decls
+         end
+      | None -> ()
+    end;
+    global_ctx'
+  in
+
+  let combine_inits prev_init init_val =
+    let open Context in
+    match prev_init, init_val with
+    | NoDef, a -> a
+    | a, NoDef -> a
+    | Tentative, a -> a
+    | a, Tentative -> a
+    | Final _, Final _ -> handle_error "multiple variable definitions"
+  in
+(*
+  let update_var_linkage maybe_decl Ast.({ storage_class }) =
+    let open Context in
+    match maybe_decl with
+    | None ->
+       begin
+         match storage_class with
+         | Static -> Internal
+         | _ -> External
+       end
+    | Some (HeapDecl (current_linkage, _)) ->
+       combine_linkages current_linkage storage_class
+  in
+*)
+  let generate_global_var context v =
     let open Context in
     let init_val = get_var_init handle_error v in
-    match maybe_decl with
-    | None -> init_val
-    | Some (HeapDecl (_, prev_init)) ->
-       begin
-         match prev_init, init_val with
-         | NoDef, a -> a
-         | a, NoDef -> a
-         | Tentative, a -> a
-         | a, Tentative -> a
-         | Final _, Final _ -> handle_error "multiple variabled definitions"
-       end
-  in
-
-  let combine_linkage maybe_decl Ast.({ storage_class }) =
-    Ast.(
-      Context.(
-        match maybe_decl with
-        | None ->
-           begin
-             match storage_class with
-             | Static -> Internal
-             | _ -> External
-           end
-      | Some (HeapDecl (current_linkage, _)) ->
-         begin
-           match current_linkage, storage_class with
-           | Nothing, _ -> failwith "global var has no linkage"
-           | External, Static -> handle_error "static declaration after non-static"
-           | Internal, Nothing -> handle_error "non_static declaration after static"
-           | _, _ -> current_linkage
-         end
-      )
-    )
-  in
-
-  let generate_global_var context v =
-    let current_decl = Context.opt_var_decl_lookup context v in
-    let init = combine_inits current_decl v in
-    let linkage = combine_linkage current_decl v in
-    let updated_decl = Context.HeapDecl (linkage, init) in
+    let current_decl = opt_decl_lookup context v.var_name in
+    let updated_decl =
+      match current_decl with
+      | None ->
+         let linkg =
+           if v.storage_class = Static
+           then Internal
+           else External
+         in
+         HeapDecl (linkg, init_val)
+      | Some (HeapDecl (current_linkage, current_init)) ->
+         let linkg = combine_linkages current_linkage v.storage_class in
+         let init = combine_inits current_init init_val in
+         HeapDecl (linkg, init)
+      | Some FunDecl _ -> handle_error "function redefined as variable"
+    in
     Context.add_global_var context v updated_decl
   in
 
   let generate_tl global_ctx = function
       (* function declaration can add variables to heap but not to global scope *)
-    | (Ast.FunDecl _) as f -> generate_fun global_ctx f; global_ctx
+    | Ast.Function f -> generate_fun global_ctx f
     | Ast.GlobalVar gv -> generate_global_var global_ctx gv
   in
 

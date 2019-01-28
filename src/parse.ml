@@ -381,7 +381,7 @@ let parse_fun fun_type name storage_class fun_map tokens =
     | Tok.Semicolon::rest' -> None, rest'
     | _ -> failwith "Unexpected token after function declaration"
   in
-  let decl = Ast.FunDecl { fun_type; name; storage_class; params; body=opt_body } in
+  let decl = Ast.Function { fun_type; name; storage_class; params; body=opt_body } in
   decl, fun_map', rest
 
 let parse_top_level fun_map tokens =

@@ -73,13 +73,16 @@ and statement =
 
 type fun_param = Param of type_def * id
 
+type fun_declaration =
+  { fun_type: type_def;
+    name: id;
+    storage_class: storage_class;
+    params: fun_param list;
+    body: block option;
+  }
+
 type top_level =
-  | FunDecl of { fun_type: type_def;
-                 name: id;
-                 storage_class: storage_class;
-                 params: fun_param list;
-                 body: block option;
-               }
+  | Function of fun_declaration
   | GlobalVar of declaration
 
 type prog = Prog of top_level list
