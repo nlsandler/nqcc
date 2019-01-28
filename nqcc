@@ -1,10 +1,34 @@
 #!/bin/bash
+assembly=""
 
-`dirname $0`/nqcc.byte $1 #compile to assembly
-if [[ $? != 0 ]]; then
-    exit 1
-fi
-base="${1%.*}"
-assembly=$base".s"
-gcc-8 -m32 $assembly -o $base #2> /dev/null
+# output is name of source file w/out extension
+out="${1%.*}"
+
+# unless it's specified with -o
+while getopts "ho:" opt; do
+    case "$opt" in
+        o )
+            out=$OPTARG;;
+        h )
+            echo "HALP"
+            exit 0;;
+        *)
+            echo "UR DOING IT WRONG"
+            exit 1;;
+    esac
+done
+shift $(expr $OPTIND - 1 )
+
+until [ -z "$1" ]
+do
+    `dirname $0`/nqcc.byte $1 #compile to assembly
+    if [[ $? != 0 ]]; then
+        exit 1
+    fi
+    base="${1%.*}"
+    assembly=$assembly" "$base".s"
+    shift
+done
+
+gcc-8 -m32 $assembly -o $out 2> /dev/null
 rm $assembly

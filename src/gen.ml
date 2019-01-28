@@ -83,10 +83,14 @@ let generate filename prog =
          print_asm "    andb %%cl, %%al\n"
        end in
 
+  (* TODO refactor a lot of these print functions, e.g. align *)
   let emit_local_heap_decl lbl heap_decl =
-    let init = Context.init_or_zero heap_decl in
+    let Context.(HeapDecl (_, Final init)) = heap_decl in
     if init = 0 then
-      Printf.fprintf chan ".zerofill __DATA,__bss,_%s,4,2\n" lbl
+      begin
+        print_asm "    .text\n";
+        Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
+      end
     else
       begin
         print_asm "    .data\n";
@@ -98,7 +102,39 @@ let generate filename prog =
 
   let emit_local_heap_decls = Map.iter emit_local_heap_decl in
 
-  let emit_global_heap_decl lbl heap_decl = failwith "TODO" in
+  let emit_global_heap_decl lbl (Context.HeapDecl (linkg, init)) =
+    let open Context in
+    let print_globl_if_extern _ =
+      if linkg = External
+      then Printf.fprintf chan "    .globl _%s\n" lbl
+      else ()
+    in
+    let init' = finalize_init init in
+    match init' with
+    | NoDef -> ()
+    | Final 0 ->
+       if linkg = External then
+         (* allocate space in .comm - NOTE different on Linux! *)
+         begin
+           print_asm "    .text\n";
+           Printf.fprintf chan "    .comm _%s,4,2\n" lbl
+         end
+       else
+         (* allocate space in bss *)
+         begin
+           print_asm "    .text\n";
+           Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
+         end
+    | Final i ->
+       begin
+         print_asm "    .text\n";
+         print_globl_if_extern ();
+         print_asm "    .data\n";
+         print_asm "    .align 2\n";
+         Printf.fprintf chan "_%s:\n" lbl;
+         Printf.fprintf chan "    .long %d\n" i
+       end
+  in
 
   let emit_global_heap_decls = Map.iter emit_global_heap_decl in
 
@@ -193,7 +229,7 @@ let generate filename prog =
          print_asm "    addl %%edx, %%esp\n"
        end
     | Const (Int i) ->
-       Printf.fprintf chan "    movl    $%d, %%eax\n" i
+      Printf.fprintf chan "    movl    $%d, %%eax\n" i
     | Const (Char c) ->
        Printf.fprintf chan "    movl    $%d, %%eax\n" (Char.code c)
     | _ -> handle_error "Constant not supported"
@@ -223,7 +259,7 @@ let generate filename prog =
          else
            handle_error "extern local variable declaration with initializer"
       | Ast.Static ->
-         Context.add_static_local_var context id init
+         Context.add_static_local_var handle_error context id init
       | Ast.Nothing ->
          let _ = match init with
            (* TODO refactor generating initializer *)
@@ -450,17 +486,19 @@ _post_loop:
     | None -> ()
   in
 
-  let combine_inits maybe_decl Ast.({ init; }) =
-    let init_val = Context.get_const init in
+  let combine_inits maybe_decl v =
+    let open Context in
+    let init_val = get_var_init handle_error v in
     match maybe_decl with
     | None -> init_val
-    | Some (Context.HeapDecl (_, prev_init)) ->
+    | Some (HeapDecl (_, prev_init)) ->
        begin
-         match init_val, prev_init with
-         | Some _, None -> init_val
-         | None, Some _ -> prev_init
-         | None, None -> None
-         | Some _, Some _ -> handle_error "multiple variable definitions"
+         match prev_init, init_val with
+         | NoDef, a -> a
+         | a, NoDef -> a
+         | Tentative, a -> a
+         | a, Tentative -> a
+         | Final _, Final _ -> handle_error "multiple variabled definitions"
        end
   in
 

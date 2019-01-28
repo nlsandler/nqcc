@@ -5,13 +5,16 @@ type linkage =
   | Internal
   | Nothing
 
+type initial =
+  | Final of int
+  | Tentative (* defaults to 0 *)
+  | NoDef
+
 type address =
   | Stack of int   (* offset on stack *)
   | Heap of string (* label *)
 
-type heap_decl = HeapDecl of linkage * int option (* linkage, init *)
-
-let init_or_zero (HeapDecl (_, init)) = Option.default 0 init
+type heap_decl = HeapDecl of linkage * initial
 
 (* A record for all the stuff we have to pass around during code generation *)
 type t = {
@@ -60,27 +63,29 @@ let init_for_fun { var_map } params =
 let already_defined { current_scope; } id = Set.mem id current_scope
 let reset_scope context = { context with current_scope=Set.empty }
 
-(*
-let add_var ({ var_map; current_scope; stack_index } as context) id =
-  let var_map' = Map.add id (Stack stack_index) var_map in
-  let current_scope' = Set.add id current_scope in
-  { context with var_map=var_map';
-                 current_scope=current_scope';
-                 stack_index=stack_index - 4
-  }
-*)
-
 (* TODO: prob doesn't belong here since gen.ml uses it *)
-let get_const = function
-  | None -> None
+let get_init on_err = function
+  | None -> Tentative
   | Some (Ast.Const c) ->
      begin
        match c with
-       | Ast.Int i -> Some i
+       | Ast.Int i -> Final i
        (* TODO: better error handling here! *)
-       | _ -> failwith "non-int initializers not implemented"
+       | _ -> on_err "non-int initializers not implemented"
      end
-  | _ -> failwith "non-constant initializer"
+  | _ -> on_err "non-constant initializer"
+
+let get_var_init on_err Ast.({ init; storage_class; }) =
+  match (get_init on_err init) with
+  | Tentative ->
+     if storage_class = Ast.Extern
+     then NoDef
+     else Tentative
+  | x -> x
+
+let finalize_init = function
+  | Tentative -> Final 0
+  | a -> a
 
 let add_extern_var ({ var_map; current_scope; } as context) id =
   let var_label = "_"^id in
@@ -96,9 +101,9 @@ let add_global_var ({ var_map; var_decl_map } as context) Ast.({ var_name=ID id 
     var_decl_map=Map.add label decl var_decl_map
   }
 
-let add_static_local_var ({ var_map; var_decl_map; current_scope; } as context) id init =
+let add_static_local_var on_err ({ var_map; var_decl_map; current_scope; } as context) id init =
   let label = Util.unique_id id in
-  let init' = get_const init in
+  let init' = finalize_init (get_init on_err init) in
   { context with
     var_map=Map.add id (Heap label) var_map;
     var_decl_map=Map.add label (HeapDecl (Internal, init')) var_decl_map;
@@ -112,34 +117,7 @@ let add_local_var ({ var_map; current_scope; stack_index; } as context) id =
     current_scope=Set.add id current_scope;
     stack_index=stack_index';
   }
-(*
-let add_var
-      ( { var_map; var_decl_map; current_scope; stack_index } as context)
-      Ast.({ var_name=ID id; init; storage_class })
-      linkg lbl =
-  let get_const = function
-    | None -> None
-    | Some (Ast.Const c) ->
-       begin
-       match c with
-       | Ast.Int i -> Some i
-       (* TODO: better error handling here! *)
-       | _ -> failwith "non-int initializers not implemented"
-       end
-    | _ -> failwith "non-constant initializer"
-  in
-  let stack_index', addr =
-    match storage_class with
-    | Ast.Nothing -> stack_index - 4, Stack stack_index
-    | _ -> stack_index, Heap lbl
-  in
-  let var_decls' = Map.add id (HeapDecl (linkg, get_const init)) var_decl_map in
-  { context with var_map=Map.add id addr var_map;
-                 var_decl_map=var_decls';
-                 current_scope=Set.add id current_scope;
-                 stack_index=stack_index'
-  }
-*)
+
 let var_lookup err_handler { var_map } var =
   try
     Map.find var var_map
@@ -148,6 +126,6 @@ let var_lookup err_handler { var_map } var =
 
 let opt_var_decl_lookup { var_decl_map } Ast.({ var_name=ID id }) =
   try
-    Some (Map.find id var_decl_map)
+    Some (Map.find ("_"^id) var_decl_map)
   with
     | Not_found -> None
