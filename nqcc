@@ -10,14 +10,21 @@ while getopts "ho:" opt; do
         o )
             out=$OPTARG;;
         h )
-            echo "HALP"
+            echo "USAGE: nqcc [-o output] inputs"
             exit 0;;
         *)
-            echo "UR DOING IT WRONG"
+            echo "USAGE: nqcc [-o output] inputs"
             exit 1;;
     esac
 done
 shift $(expr $OPTIND - 1 )
+
+if [ -z "$1" ]
+then
+    echo "USAGE: nqcc [-o output] inputs"
+    echo "Must specify at least one input file"
+    exit 1
+fi
 
 until [ -z "$1" ]
 do
@@ -30,5 +37,5 @@ do
     shift
 done
 
-gcc-8 -m32 $assembly -o $out 2> /dev/null
+gcc-8 -m32 $assembly -o $out -fno-pie 2>/dev/null
 rm $assembly

@@ -49,8 +49,7 @@ type declaration =
   { var_type: type_def;
     var_name: id;
     init: exp option;
-    storage_class: storage_class; (* this is ALSO true for global vars without static kw *)
-    (* global: bool; *) (* global vars w/out static kw *)
+    storage_class: storage_class;
   }
 
 type block_item =

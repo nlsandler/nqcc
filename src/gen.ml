@@ -5,7 +5,6 @@ let generate filename prog =
   (* Open assembly file for writing *)
   let filename_asm = String.splice filename (-1) 1 "s" in
   let chan = open_out filename_asm in
-  (* TODO: add newline! *)
   let print_asm = Printf.fprintf chan "%s\n" in
 
   let handle_error message = begin
@@ -59,7 +58,7 @@ let generate filename prog =
          (* remainder stored in edx, move it to eax *)
          print_asm "    movl %edx, %eax"
        end
-    | Sub -> print_asm "    subl %ecx, %eax"
+    | Sub -> print_asm "    subl %ecx, %eax";
     | Add -> print_asm "    addl %ecx, %eax";
     | Mult -> print_asm "    imul %ecx, %eax";
     | Xor -> print_asm "    xor %ecx, %eax";
@@ -73,32 +72,18 @@ let generate filename prog =
     | Le -> emit_comparison "setle"
     | Gt -> emit_comparison "setg"
     | Ge -> emit_comparison "setge"
-    | Or ->
-       begin
-         print_asm "    orl %eax, %ecx";
-         print_asm "    movl $0, %eax";
-         print_asm "    setne %al"
-       end
-    | And ->
-       begin
-         (* if eax != 0, set al = 1 *)
-         print_asm "    cmp $0, %eax";
-         print_asm "    movl $0, %eax"; (* zero this b/c we'll store result in it*)
-         print_asm "    setne %al";
-         (* if ecx != 0, set cl = 1 *)
-         print_asm "    cmp $0, %ecx";
-         print_asm "    setne %cl";
-         (* eax = al && cl *)
-         print_asm "    andb %cl, %al"
-       end in
-
+    | Or -> failwith "Shouldn't handle or here!"
+    | And -> failwith "Shouldn't handle and here!"
+  in
   (* TODO refactor a lot of these print functions, e.g. align *)
   let emit_local_heap_decl lbl = function
     | Context.(HeapDecl (_, Final init)) ->
        if init = 0 then
          begin
-           print_asm "    .text";
-           Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
+           print_asm "    .bss";
+           print_asm "    .align 2";
+           Printf.fprintf chan "_%s:\n" lbl;
+           print_asm "    .zero 4";
          end
        else
          begin
@@ -135,12 +120,13 @@ let generate filename prog =
              else
                (* allocate space in bss *)
                begin
-                 print_asm "    .text";
-                 Printf.fprintf chan "    .zerofill __DATA,__bss,_%s,4,2\n" lbl
+                 print_asm "    .bss";
+                 print_asm "    .align 2";
+                 Printf.fprintf chan "_%s:\n" lbl;
+                 print_asm "    .zero 4"
                end
           | Final i ->
              begin
-               print_asm "    .text";
                print_globl_if_extern linkg lbl;
                print_asm "    .data";
                print_asm "    .align 2";
@@ -158,7 +144,6 @@ let generate filename prog =
   let rec generate_exp context = function
     | Ast.(Assign (Equals, (ID id), exp)) ->
        let _ = generate_exp context exp in
-       (* get location of variable in memory *)
        begin
          match var_lookup context id with
          | Context.Stack var_index -> Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
@@ -186,6 +171,44 @@ let generate filename prog =
          generate_exp context e3;
          (* Label end of ternary operation *)
          emit_label post_tern_label
+       end
+    | BinOp (And, e1, e2) ->
+       let clause2_lbl = Util.unique_id "and_clause2" in
+       let post_expr_lbl = Util.unique_id "post_and" in
+       begin
+         generate_exp context e1;
+         (* compare eax to 0 *)
+         print_asm "    cmp $0, %eax";
+         (* if not equal, e1 is true, so jump to e2 *)
+         Printf.fprintf chan "    jne %s\n" clause2_lbl;
+         (* if we're here, e1 is 0 so just jump to end of expression without computing e2 *)
+         Printf.fprintf chan "    jmp %s\n" post_expr_lbl;
+         (* handle case where e1 is false - return 1 iff e2 is true *)
+         emit_label clause2_lbl;
+         generate_exp context e2;
+         (* if eax != 0, set eax = 1 *)
+         print_asm "    cmp $0, %eax";
+         print_asm "    movl $0, %eax";
+         print_asm "    setne %al";
+         emit_label post_expr_lbl;
+       end
+    | BinOp (Or, e1, e2) ->
+       let clause2_lbl = Util.unique_id "or_clause2" in
+       let post_expr_lbl = Util.unique_id "post_or" in
+       begin
+         generate_exp context e1;
+         print_asm "    cmp $0, %eax";
+         Printf.fprintf chan "    je %s\n" clause2_lbl;
+         (* if we're here, return 1 *)
+         print_asm "    movl $1, %eax";
+         Printf.fprintf chan "    jmp %s\n" post_expr_lbl;
+         (* handle case where e1 is true - return 1 iff e2 is true *)
+         emit_label clause2_lbl;
+         generate_exp context e2;
+         print_asm "    cmp $0, %eax";
+         print_asm "    movl $0, %eax";
+         print_asm "    setne %al";
+         emit_label post_expr_lbl;
        end
     | BinOp (op, e1, e2) ->
        begin
@@ -547,20 +570,7 @@ _post_loop:
     | a, Tentative -> a
     | Final _, Final _ -> handle_error "multiple variable definitions"
   in
-(*
-  let update_var_linkage maybe_decl Ast.({ storage_class }) =
-    let open Context in
-    match maybe_decl with
-    | None ->
-       begin
-         match storage_class with
-         | Static -> Internal
-         | _ -> External
-       end
-    | Some (HeapDecl (current_linkage, _)) ->
-       combine_linkages current_linkage storage_class
-  in
-*)
+
   let generate_global_var context v =
     let open Context in
     let init_val = get_var_init handle_error v in
