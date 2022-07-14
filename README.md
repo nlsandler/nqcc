@@ -5,6 +5,7 @@
 A compiler for a tiny (but growing!) subset of C, written in OCaml.
 
 ## Requirements
+* Install gcc-multilib
 * Install OCaml and OPAM
 * Configure OPAM
 ````

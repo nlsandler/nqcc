@@ -82,14 +82,14 @@ let generate filename prog =
          begin
            print_asm "    .bss";
            print_asm "    .align 2";
-           Printf.fprintf chan "_%s:\n" lbl;
+           Printf.fprintf chan "%s:\n" lbl;
            print_asm "    .zero 4";
          end
        else
          begin
            print_asm "    .data";
            print_asm "    .align 2";
-           Printf.fprintf chan "_%s:\n" lbl;
+           Printf.fprintf chan "%s:\n" lbl;
         Printf.fprintf chan "    .long %d\n" init
          end
     | other -> failwith "tentative definition of local var"
@@ -99,7 +99,7 @@ let generate filename prog =
 
   let print_globl_if_extern linkg lbl =
     if linkg = Context.External
-    then Printf.fprintf chan "    .globl _%s\n" lbl
+    then Printf.fprintf chan "    .globl %s\n" lbl
     else ()
   in
 
@@ -115,14 +115,14 @@ let generate filename prog =
                (* allocate space in .comm - NOTE different on Linux! *)
                begin
                  print_asm "    .text";
-                 Printf.fprintf chan "    .comm _%s,4,2\n" lbl
+                 Printf.fprintf chan "    .comm %s,4,2\n" lbl
                end
              else
                (* allocate space in bss *)
                begin
                  print_asm "    .bss";
                  print_asm "    .align 2";
-                 Printf.fprintf chan "_%s:\n" lbl;
+                 Printf.fprintf chan "%s:\n" lbl;
                  print_asm "    .zero 4"
                end
           | Final i ->
@@ -130,7 +130,7 @@ let generate filename prog =
                print_globl_if_extern linkg lbl;
                print_asm "    .data";
                print_asm "    .align 2";
-               Printf.fprintf chan "_%s:\n" lbl;
+               Printf.fprintf chan "%s:\n" lbl;
                Printf.fprintf chan "    .long %d\n" i
              end
           | Tentative -> failwith "failed to finalize tentative def"
@@ -147,7 +147,7 @@ let generate filename prog =
        begin
          match var_lookup context id with
          | Context.Stack var_index -> Printf.fprintf chan "    movl %%eax, %d(%%ebp)\n" var_index
-         | Context.Heap lbl -> Printf.fprintf chan "    movl %%eax, _%s\n" lbl
+         | Context.Heap lbl -> Printf.fprintf chan "    movl %%eax, %s\n" lbl
          | Context.Fun _ -> handle_error "tried to assign function to variable"
        end
 
@@ -240,7 +240,7 @@ let generate filename prog =
          (* move value  of variable to eax *)
          match var_lookup context id with
          | Context.Stack var_index -> Printf.fprintf chan "    movl %d(%%ebp), %%eax\n" var_index
-         | Context.Heap lbl -> Printf.fprintf chan "    movl _%s, %%eax\n" lbl
+         | Context.Heap lbl -> Printf.fprintf chan "    movl %s, %%eax\n" lbl
          (* NOTE: this does not actually violate the spec *)
          | Context.Fun _ -> handle_error "Trying to reference function as variable"
        end
@@ -262,7 +262,7 @@ let generate filename prog =
        let _ = put_args_on_stack context args in
        begin
          (* actually make the call *)
-         Printf.fprintf chan "    call _%s\n" id;
+         Printf.fprintf chan "    call %s\n" id;
          (* deallocate args *)
          Printf.fprintf chan "    addl $%d, %%esp\n" (arg_count * 4);
          (* pop remainder off stack, undo 16-byte alignment *)
@@ -543,7 +543,7 @@ _post_loop:
          let _ = begin
              print_asm "    .text";
              print_globl_if_extern f_linkg fun_name;
-             Printf.fprintf chan "_%s:\n" fun_name;
+             Printf.fprintf chan "%s:\n" fun_name;
              print_asm "    push %ebp";
              print_asm "    movl %esp, %ebp"
            end
