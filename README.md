@@ -1,5 +1,7 @@
 # NQCC - a not-quite-C compiler
 
+**This repo is no longer active. I'm working on a new version of NQCC - I'll link to it here once it's released!**
+
 A compiler for a tiny (but growing!) subset of C, written in OCaml.
 
 ## Requirements
